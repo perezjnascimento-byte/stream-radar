@@ -37,8 +37,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { moviesDatabase } from './data/movies';
 import { standbyMoviesPool } from './data/standby';
 import { Movie, UserRating, LocalStats, AISpectatorProfile, AIRecommendation } from './types';
-import { fetchTrendingOrDiscover, searchMoviesTMDB } from './services/tmdb';
+import { fetchTrendingOrDiscover, searchMoviesTMDB, fetchMovieKeywords } from './services/tmdb';
 import { signIn, signUp, logOut, onAuthStateChange, getUserDoc, saveUserDoc, resetPassword } from './services/firebase';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 
 // Predefined hot suggestion capsules for users to instantly look up movies globally using Gemini
@@ -139,6 +140,9 @@ export default function App() {
   // Onboarding state variables
   const [onboardingMovies, setOnboardingMovies] = useState<Movie[]>([]);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
+
+  // AI Profile generation
+  const [isGeneratingAIProfile, setIsGeneratingAIProfile] = useState(false);
 
   // Listen to Auth State Changes
   useEffect(() => {
@@ -245,6 +249,89 @@ export default function App() {
       setAuthFormLoading(false);
     }
   };
+
+  const gatherUserCinematicDNA = async (currentRatings: UserRating[], currentAllMovies: Movie[]) => {
+    const positiveRatings = currentRatings.filter(r => r.liked === 'love' || r.liked === 'like');
+    const topRatings = positiveRatings.slice(0, 10);
+    
+    const tmdbApiKey = import.meta.env.VITE_TMDB_API_KEY;
+    let combinedDNA = [];
+    
+    for (const r of topRatings) {
+      const movie = currentAllMovies.find(m => m.id === r.movieId);
+      if (!movie) continue;
+      
+      let keywords: string[] = [];
+      if (movie.id.startsWith('tmdb-') && tmdbApiKey && tmdbApiKey !== "SUA_CHAVE_AQUI" && tmdbApiKey.trim() !== "") {
+        const tmdbId = parseInt(movie.id.replace('tmdb-', ''));
+        if (!isNaN(tmdbId)) {
+          keywords = await fetchMovieKeywords(tmdbId, tmdbApiKey);
+        }
+      }
+      
+      combinedDNA.push(`Title: ${movie.title}, Year: ${movie.year}, Genres: ${movie.genres.join(', ')}, Keywords: ${keywords.slice(0, 5).join(', ')}`);
+    }
+    
+    return combinedDNA.join(' | ');
+  };
+
+  const generateCognitiveProfile = async (cinematicDNA: string) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error("Chave de API do Gemini (VITE_GEMINI_API_KEY) não configurada no ambiente.");
+    
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    const prompt = `You are an expert film curator and psychological analyst. Analyze this list of movie metadata/keywords heavily favored by a user: ${cinematicDNA}. 
+Do not just look at genres. Find the underlying narrative, aesthetic, and emotional connecting thread (fio condutor). 
+Return ONLY a valid JSON object with the following structure:
+{
+  "archetypeTitle": "A creative, sophisticated title (e.g., 'O Viajante de Distopias Melancólicas')",
+  "connectingThread": "A short, deep 2-sentence explanation of what really connects their taste (e.g., aesthetic, pacing, themes).",
+  "dominantVibe": "1-3 words describing the mood",
+  "nextRecommendationPrompt": "A highly specific search query string to find their next favorite movie."
+}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error("Invalid JSON returned by Gemini");
+  };
+
+  const handleGenerateCognitiveProfile = async () => {
+    setIsGeneratingAIProfile(true);
+    try {
+      const dna = await gatherUserCinematicDNA(ratings, allMovies);
+      if (!dna) {
+        throw new Error("Sem dados suficientes para análise.");
+      }
+      const profile = await generateCognitiveProfile(dna);
+      
+      setAiProfile({
+        archetypeName: profile.archetypeTitle,
+        archetypeDescription: profile.connectingThread,
+        psychologicalAssessment: profile.connectingThread,
+        narrativeThemesInCommon: [profile.dominantVibe],
+        statisticsSummary: {
+          dominantGenre: 'Análise Direcionada por IA',
+          preferredPacing: profile.dominantVibe,
+          thematicFocus: profile.nextRecommendationPrompt
+        },
+        genreBreakdownDetails: [],
+        customRecommendations: []
+      });
+      triggerGlobalToast("Mapeamento atualizado com sucesso!", "success");
+    } catch (e: any) {
+      console.error(e);
+      triggerGlobalToast(e.message || "Erro ao gerar perfil cognitivo pela IA.", "error");
+    } finally {
+      setIsGeneratingAIProfile(false);
+    }
+  };
+
 
   // Fetch onboarding movies
   useEffect(() => {
@@ -3419,16 +3506,22 @@ export default function App() {
 
                   <div className="space-y-2">
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans font-black text-white leading-tight tracking-tight">
-                      Perfil: O Arquiteto de Labirintos Existenciais
+                      {aiProfile ? aiProfile.archetypeName : 'Perfil: O Arquiteto de Labirintos Existenciais'}
                     </h2>
                     <p className="text-xs md:text-sm text-[#A1A1A6] font-semibold font-sans tracking-wide">
-                      {ratings.length} Produções Analisadas &nbsp;|&nbsp; {ratings.filter(r => r.liked).length} Favoritos &nbsp;|&nbsp; Afinidade: Sci-Fi
+                      {ratings.length} Produções Analisadas &nbsp;|&nbsp; {aiProfile ? aiProfile.narrativeThemesInCommon[0] : 'Afinidade: Sci-Fi'}
                     </p>
+                    {aiProfile && (
+                      <p className="text-sm md:text-base text-zinc-300 font-sans leading-relaxed max-w-2xl mt-4">
+                        {aiProfile.archetypeDescription}
+                      </p>
+                    )}
                   </div>
 
                   <div className="pt-2">
                     <button
                       onClick={() => {
+                        handleGenerateCognitiveProfile();
                         if (typeof window !== 'undefined') {
                           const btn = document.getElementById('ai-pulse-radar-btn');
                           if (btn) {
@@ -3437,11 +3530,16 @@ export default function App() {
                           }
                         }
                       }}
+                      disabled={isGeneratingAIProfile}
                       id="ai-pulse-radar-btn"
-                      className="bg-[#00E5FF] text-[#050505] px-6 py-3 rounded-xl text-xs sm:text-sm font-bold hover:bg-cyan-300 transition-all font-mono tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(0,229,255,0.25)] hover:shadow-[0_0_35px_rgba(0,229,255,0.45)] cursor-pointer"
+                      className="bg-[#00E5FF] text-[#050505] px-6 py-3 rounded-xl text-xs sm:text-sm font-bold hover:bg-cyan-300 transition-all font-mono tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(0,229,255,0.25)] hover:shadow-[0_0_35px_rgba(0,229,255,0.45)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Sparkles className="w-4 h-4 text-[#050505]" />
-                      Atualizar Mapeamento por IA
+                      {isGeneratingAIProfile ? (
+                        <Loader2 className="w-4 h-4 text-[#050505] animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-[#050505]" />
+                      )}
+                      {isGeneratingAIProfile ? "Processando DNA Cinematográfico..." : "Atualizar Mapeamento por IA"}
                     </button>
                   </div>
                 </div>

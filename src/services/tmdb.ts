@@ -69,6 +69,18 @@ export async function fetchMovieCredits(movieId: number, apiKey: string): Promis
   }
 }
 
+export async function fetchMovieKeywords(movieId: number, apiKey: string): Promise<string[]> {
+  try {
+    const res = await fetch(`https://api.themoviedb.org/3/movie/${movieId}/keywords?api_key=${apiKey}`);
+    if (!res.ok) throw new Error('Falha ao buscar keywords');
+    const data = await res.json();
+    return (data.keywords || []).map((k: any) => k.name);
+  } catch (error) {
+    console.warn(`Erro ao buscar keywords para o filme ${movieId}:`, error);
+    return [];
+  }
+}
+
 export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: number): Promise<Movie[]> {
   if (!apiKey) {
     throw new Error('Chave de API do TMDB não configurada.');
