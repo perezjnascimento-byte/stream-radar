@@ -3300,45 +3300,96 @@ export default function App() {
                 <circle cx="280" cy="200" r="3.5" fill="#00E5FF" className="animate-pulse" />
               </svg>
 
-              <div className="max-w-2xl relative z-10 flex flex-col items-start text-left gap-4">
-                <div className="inline-flex items-center gap-2 bg-[#00E5FF]/10 border border-[#00E5FF]/35 px-3.5 py-1.5 rounded-full">
-                  <span className="flex h-1.5 w-1.5 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00E5FF] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#00E5FF]"></span>
-                  </span>
-                  <span className="text-[10px] md:text-xs font-mono font-black tracking-widest text-[#00E5FF] uppercase">
-                    Mapeamento Cognitivo Ativo
-                  </span>
-                </div>
+              {ratings.length < 20 ? (
+                /* ── LOCKED: threshold not yet reached ── */
+                <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 w-full justify-center text-center md:text-left">
+                  {/* Radar animation */}
+                  <div className="relative w-28 h-28 shrink-0 flex items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-[#00E5FF]/10 animate-ping opacity-75" />
+                    <div className="relative rounded-full h-20 w-20 bg-gradient-to-tr from-[#00E5FF] to-[#0A84FF] p-[2px] shadow-[0_0_30px_rgba(0,229,255,0.4)] animate-spin">
+                      <div className="w-full h-full bg-zinc-950 rounded-full flex items-center justify-center">
+                        <Sparkles className="w-8 h-8 text-[#00E5FF] animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 border border-[#00E5FF]/20 rounded-full animate-pulse scale-125 pointer-events-none" />
+                    <div className="absolute inset-0 border border-[#00E5FF]/10 rounded-full animate-pulse scale-150 pointer-events-none" />
+                  </div>
 
-                <div className="space-y-2">
-                  <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans font-black text-white leading-tight tracking-tight">
-                    Perfil: O Arquiteto de Labirintos Existenciais
-                  </h2>
-                  <p className="text-xs md:text-sm text-[#A1A1A6] font-semibold font-sans tracking-wide">
-                    132 Produções Analisadas &nbsp;|&nbsp; 80 Favoritos &nbsp;|&nbsp; Afinidade: Sci-Fi
-                  </p>
-                </div>
+                  {/* Calibration text + progress */}
+                  <div className="flex flex-col gap-3 max-w-md">
+                    <div className="inline-flex items-center gap-2 bg-[#00E5FF]/10 border border-[#00E5FF]/35 px-3.5 py-1.5 rounded-full self-start mx-auto md:mx-0">
+                      <span className="flex h-1.5 w-1.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00E5FF] opacity-75" />
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#00E5FF]" />
+                      </span>
+                      <span className="text-[10px] md:text-xs font-mono font-black tracking-widest text-[#00E5FF] uppercase">
+                        Mapeamento Cognitivo Ativo
+                      </span>
+                    </div>
 
-                <div className="pt-2">
-                  <button
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        const btn = document.getElementById('ai-pulse-radar-btn');
-                        if (btn) {
-                          btn.classList.add('scale-95');
-                          setTimeout(() => btn.classList.remove('scale-95'), 150);
+                    <h2 className="text-2xl md:text-3xl font-sans font-black text-white leading-tight tracking-tight">
+                      Calibrando seu perfil cognitivo...
+                    </h2>
+                    <p className="text-sm text-zinc-300 font-sans leading-relaxed">
+                      Avalie mais{' '}
+                      <strong className="text-[#00E5FF] font-black">{20 - ratings.length}</strong>
+                      {' '}produções para revelar seu Arquétipo.
+                    </p>
+
+                    {/* Progress bar */}
+                    <div className="w-full max-w-xs bg-zinc-900 h-2 rounded-full overflow-hidden border border-white/5">
+                      <div
+                        className="bg-gradient-to-r from-[#00E5FF] to-[#0A84FF] h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(0,229,255,0.5)]"
+                        style={{ width: `${Math.min(100, (ratings.length / 20) * 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">
+                      Sintonia atual: {ratings.length} / 20 avaliações
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* ── UNLOCKED: threshold reached ── */
+                <div className="max-w-2xl relative z-10 flex flex-col items-start text-left gap-4">
+                  <div className="inline-flex items-center gap-2 bg-[#00E5FF]/10 border border-[#00E5FF]/35 px-3.5 py-1.5 rounded-full">
+                    <span className="flex h-1.5 w-1.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00E5FF] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#00E5FF]" />
+                    </span>
+                    <span className="text-[10px] md:text-xs font-mono font-black tracking-widest text-[#00E5FF] uppercase">
+                      Mapeamento Cognitivo Ativo
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans font-black text-white leading-tight tracking-tight">
+                      Perfil: O Arquiteto de Labirintos Existenciais
+                    </h2>
+                    <p className="text-xs md:text-sm text-[#A1A1A6] font-semibold font-sans tracking-wide">
+                      {ratings.length} Produções Analisadas &nbsp;|&nbsp; {ratings.filter(r => r.liked).length} Favoritos &nbsp;|&nbsp; Afinidade: Sci-Fi
+                    </p>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          const btn = document.getElementById('ai-pulse-radar-btn');
+                          if (btn) {
+                            btn.classList.add('scale-95');
+                            setTimeout(() => btn.classList.remove('scale-95'), 150);
+                          }
                         }
-                      }
-                    }}
-                    id="ai-pulse-radar-btn"
-                    className="bg-[#00E5FF] text-[#050505] px-6 py-3 rounded-xl text-xs sm:text-sm font-bold hover:bg-cyan-300 transition-all font-mono tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(0,229,255,0.25)] hover:shadow-[0_0_35px_rgba(0,229,255,0.45)] cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4 text-[#050505]" />
-                    Atualizar Mapeamento por IA
-                  </button>
+                      }}
+                      id="ai-pulse-radar-btn"
+                      className="bg-[#00E5FF] text-[#050505] px-6 py-3 rounded-xl text-xs sm:text-sm font-bold hover:bg-cyan-300 transition-all font-mono tracking-wider flex items-center gap-2 shadow-[0_0_25px_rgba(0,229,255,0.25)] hover:shadow-[0_0_35px_rgba(0,229,255,0.45)] cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-[#050505]" />
+                      Atualizar Mapeamento por IA
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </section>
 
             {/* DYNAMIC IA GLOBAL SEARCH SYSTEM ("thousands & hundreds of thousands of films") */}
