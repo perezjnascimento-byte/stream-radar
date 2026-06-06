@@ -4,7 +4,8 @@ import {
   signInWithEmailAndPassword as fbSignIn, 
   createUserWithEmailAndPassword as fbCreateUser, 
   signOut as fbSignOut, 
-  onAuthStateChanged as fbOnAuthStateChanged
+  onAuthStateChanged as fbOnAuthStateChanged,
+  sendPasswordResetEmail as fbSendPasswordResetEmail
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -189,6 +190,18 @@ export const saveUserDoc = async (uid, data) => {
       uid
     };
     localStorage.setItem('mock_firebase_db', JSON.stringify(mockDb));
+  }
+};
+
+export const resetPassword = async (email) => {
+  if (isConfigured && auth) {
+    await fbSendPasswordResetEmail(auth, email);
+  } else {
+    const mockUsers = JSON.parse(localStorage.getItem('mock_firebase_users') || '[]');
+    if (!mockUsers.some(u => u.email === email)) {
+      throw new Error("Usuário não encontrado.");
+    }
+    console.log("Mock: Link de recuperação de senha enviado para", email);
   }
 };
 

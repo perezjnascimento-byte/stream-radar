@@ -38,7 +38,7 @@ import { moviesDatabase } from './data/movies';
 import { standbyMoviesPool } from './data/standby';
 import { Movie, UserRating, LocalStats, AISpectatorProfile, AIRecommendation } from './types';
 import { fetchTrendingOrDiscover, searchMoviesTMDB } from './services/tmdb';
-import { signIn, signUp, logOut, onAuthStateChange, getUserDoc, saveUserDoc } from './services/firebase';
+import { signIn, signUp, logOut, onAuthStateChange, getUserDoc, saveUserDoc, resetPassword } from './services/firebase';
 
 
 // Predefined hot suggestion capsules for users to instantly look up movies globally using Gemini
@@ -134,6 +134,7 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authFormLoading, setAuthFormLoading] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
 
   // Onboarding state variables
   const [onboardingMovies, setOnboardingMovies] = useState<Movie[]>([]);
@@ -224,6 +225,22 @@ export default function App() {
     } catch (err: any) {
       console.error("Firebase API Auth Failure:", err);
       setAuthError(err.message || "Ocorreu um erro na autenticação.");
+    } finally {
+      setAuthFormLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthFormLoading(true);
+    try {
+      await resetPassword(email);
+      triggerGlobalToast("Link de recuperação enviado para o seu e-mail", "success");
+      setIsForgotPassword(false);
+    } catch (err: any) {
+      console.error("Password reset failure:", err);
+      setAuthError(err.message || "Ocorreu um erro na recuperação de senha.");
     } finally {
       setAuthFormLoading(false);
     }
@@ -2797,15 +2814,15 @@ export default function App() {
           </div>
 
           <div className="space-y-1.5">
-            <h2 className="text-lg font-bold text-white tracking-tight font-sans">
-              {isRegister ? "Criar nova conta" : "Entrar no sistema"}
+            <h2 className="text-lg md:text-xl font-bold text-white tracking-tight font-sans">
+              {isForgotPassword ? "Recuperação de Senha" : (isRegister ? "Criar nova conta" : "Entrar no sistema")}
             </h2>
-            <p className="text-xs text-zinc-400 font-sans">
-              {isRegister ? "Registre-se para sincronizar seu Perfil Cognitivo" : "Acesse seu radar de recomendações personalizadas"}
+            <p className="text-xs md:text-sm text-zinc-400 font-sans">
+              {isForgotPassword ? "Enviaremos um link para redefinir sua senha." : (isRegister ? "Registre-se para sincronizar seu Perfil Cognitivo" : "Acesse seu radar de recomendações personalizadas")}
             </p>
           </div>
 
-          <form onSubmit={handleAuthSubmit} className="space-y-4 text-left">
+          <form onSubmit={isForgotPassword ? handleForgotPasswordSubmit : handleAuthSubmit} className="space-y-4 text-left">
             <div>
               <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Endereço de E-mail</label>
               <input 
@@ -2818,28 +2835,30 @@ export default function App() {
               />
             </div>
 
-            <div>
-              <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Sua Senha</label>
-              <div className="relative">
-                <input 
-                  type={showPassword ? "text" : "password"} 
-                  required 
-                  placeholder="••••••••" 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#070709]/80 border border-white/10 text-xs text-white rounded-xl pl-4 pr-10 py-3 placeholder-zinc-650 focus:outline-none focus:border-[#00E5FF] focus:shadow-[0_0_15px_rgba(0,229,255,0.15)] transition-all font-sans"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-3 text-zinc-500 hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            {!isForgotPassword && (
+              <div>
+                <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Sua Senha</label>
+                <div className="relative">
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    required 
+                    placeholder="••••••••" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-[#070709]/80 border border-white/10 text-xs text-white rounded-xl pl-4 pr-10 py-3 placeholder-zinc-650 focus:outline-none focus:border-[#00E5FF] focus:shadow-[0_0_15px_rgba(0,229,255,0.15)] transition-all font-sans"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
-            {isRegister && (
+            {isRegister && !isForgotPassword && (
               <div>
                 <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Confirmar Senha</label>
                 <input 
@@ -2869,15 +2888,33 @@ export default function App() {
             </button>
           </form>
 
+          {!isForgotPassword && !isRegister && (
+            <div className="text-center mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotPassword(true);
+                  setAuthError(null);
+                }}
+                className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+          )}
+
           <div className="border-t border-white/5 pt-4">
             <button
               onClick={() => {
+                setIsForgotPassword(false);
                 setIsRegister(!isRegister);
                 setAuthError(null);
               }}
               className="text-xs text-[#00E5FF] hover:underline cursor-pointer font-sans"
             >
-              {isRegister ? "Já possui conta? Faça login" : "Ainda não tem conta? Cadastre-se"}
+              {isForgotPassword 
+                ? "Voltar para o Login" 
+                : (isRegister ? "Já possui conta? Faça login" : "Ainda não tem conta? Cadastre-se")}
             </button>
           </div>
 
@@ -3085,7 +3122,7 @@ export default function App() {
           </div>
 
           {/* Centralized Apple Horizontal Tabs Row */}
-          <nav className="flex bg-zinc-900/90 p-1 rounded-2xl border border-white/5 backdrop-blur-xl shrink-0 flex-wrap gap-1 justify-center">
+          <nav className="flex bg-zinc-900/90 p-1 rounded-2xl border border-white/5 backdrop-blur-xl shrink-0 flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-hide pr-4 gap-1 md:justify-center">
             <button
               onClick={() => setActiveTab('catalog')}
               className={`px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
@@ -3150,23 +3187,42 @@ export default function App() {
             </div>
 
             {user && (
-              <div className="flex items-center gap-2.5 border-l border-white/10 pl-4">
-                <span className="text-[10px] text-zinc-400 hidden lg:block font-mono max-w-[120px] truncate" title={user.email}>
-                  {user.email}
-                </span>
-                <button 
-                  onClick={async () => {
-                    try {
-                      await logOut();
-                      triggerGlobalToast("Você saiu com sucesso.", "info");
-                    } catch (e) {
-                      triggerGlobalToast("Erro ao sair.", "error");
-                    }
-                  }}
-                  className="text-[10px] text-zinc-405 hover:text-white hover:bg-zinc-900 border border-white/10 hover:border-white/20 transition-all px-3 py-1.5 rounded-xl font-mono cursor-pointer font-semibold"
-                >
-                  Sair
+              <div className="flex items-center gap-2.5 border-l border-white/10 pl-4 relative group">
+                <button className="flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-white/10 px-3 py-1.5 rounded-xl transition-colors cursor-pointer">
+                  <User className="w-4 h-4 text-zinc-400" />
+                  <span className="text-xs font-semibold hidden sm:block">Minha Conta</span>
                 </button>
+                <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  <div className="px-3 py-2 border-b border-white/5 mb-1">
+                    <p className="text-[10px] text-zinc-500 font-mono truncate" title={user.email}>{user.email}</p>
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await resetPassword(user.email);
+                        triggerGlobalToast("Link de recuperação enviado para o seu e-mail", "success");
+                      } catch (e) {
+                        triggerGlobalToast("Erro ao enviar email", "error");
+                      }
+                    }}
+                    className="w-full text-left text-xs text-zinc-300 hover:text-white hover:bg-white/5 rounded-lg px-3 py-2 transition-colors cursor-pointer"
+                  >
+                    Redefinir Senha
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await logOut();
+                        triggerGlobalToast("Você saiu com sucesso.", "info");
+                      } catch (e) {
+                        triggerGlobalToast("Erro ao sair.", "error");
+                      }
+                    }}
+                    className="w-full text-left text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg px-3 py-2 transition-colors mt-1 cursor-pointer"
+                  >
+                    Sair
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -3182,7 +3238,7 @@ export default function App() {
           <div className="space-y-12 animate-fade-in text-left">
 
             {/* RADAR DE DESCOBERTAS: PARA VOCÊ (INFINITE DISCOVERY FEED) */}
-            <section className="bg-zinc-950/60 border border-[#00E5FF]/10 rounded-3xl p-6 shadow-[0_0_50px_rgba(0,229,255,0.02)] relative overflow-hidden">
+            <section className="bg-zinc-950/60 border border-[#00E5FF]/10 rounded-3xl p-4 md:p-6 shadow-[0_0_50px_rgba(0,229,255,0.02)] relative overflow-hidden">
               <div className="absolute top-0 right-0 w-80 h-80 bg-[#00E5FF]/5 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
               
@@ -3190,7 +3246,7 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-[#00E5FF] animate-pulse" />
-                    <h3 className="font-display font-black text-lg text-white tracking-tight">
+                    <h3 className="font-display font-black text-base md:text-lg text-white tracking-tight">
                       Radar de Descobertas: <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00E5FF] to-purple-400">Para Você</span>
                     </h3>
                   </div>
@@ -3393,7 +3449,7 @@ export default function App() {
             </section>
 
             {/* DYNAMIC IA GLOBAL SEARCH SYSTEM ("thousands & hundreds of thousands of films") */}
-            <section className="bg-zinc-900/35 border border-white/10 rounded-3xl p-6 backdrop-blur-xl relative">
+            <section className="bg-zinc-900/35 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-xl relative">
               <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
               
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -3605,7 +3661,7 @@ export default function App() {
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono block pl-1">
                     Filtrar por streaming ou exibição nos cinemas:
                   </span>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-hide pr-4 pb-2 gap-2">
                     {[
                       { id: 'all', label: '🌍 Todos', color: 'border-white/5 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700 hover:text-white' },
                       { id: 'Netflix', label: '🔴 Netflix', color: 'border-white/5 bg-red-950/10 text-rose-100 hover:border-red-800/40' },
@@ -3935,7 +3991,7 @@ export default function App() {
         {activeTab === 'watchlist' && (
           <div className="space-y-6">
             
-            <div className="bg-zinc-900/40 p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-zinc-900/40 p-4 md:p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="font-display font-black text-xl text-white flex items-center gap-2">
                   <Bookmark className="w-5.5 h-5.5 text-purple-400 fill-purple-400" />
@@ -3981,7 +4037,7 @@ export default function App() {
         {/* 3. HISTÓRICO VIEW Tab */}
         {activeTab === 'history' && (
           <div className="space-y-6">
-            <div className="bg-zinc-900/40 p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-zinc-900/40 p-4 md:p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="font-display font-black text-xl text-white flex items-center gap-2">
                   <FolderHeart className="w-5.5 h-5.5 text-indigo-400" />
@@ -4161,7 +4217,7 @@ export default function App() {
               <>
             
             {/* Top overview status board */}
-            <div className="bg-zinc-900/40 p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+            <div className="bg-zinc-900/40 p-4 md:p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
               <div className="absolute top-[-30px] left-[-30px] w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
               
               <div className="relative z-10 flex flex-col gap-1.5">
@@ -4233,7 +4289,7 @@ export default function App() {
               <div className="lg:col-span-12 xl:col-span-5 space-y-6">
                 
                 {/* Metrics overview card */}
-                <div className="bg-[#111111]/80 backdrop-blur-md p-6 rounded-3xl border border-white/5 space-y-6 text-left">
+                <div className="bg-[#111111]/80 backdrop-blur-md p-4 md:p-6 rounded-3xl border border-white/5 space-y-6 text-left">
                   
                   <div className="flex items-center gap-2 border-b border-white/5 pb-3">
                     <User className="w-5 h-5 text-[#00E5FF]" />
