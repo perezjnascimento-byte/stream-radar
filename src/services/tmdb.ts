@@ -69,14 +69,19 @@ export async function fetchMovieCredits(movieId: number, apiKey: string): Promis
   }
 }
 
-export async function fetchTrendingOrDiscover(apiKey: string): Promise<Movie[]> {
+export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: number): Promise<Movie[]> {
   if (!apiKey) {
     throw new Error('Chave de API do TMDB não configurada.');
   }
 
-  // Fetch popular or trending sci-fi/drama movies
-  // Genres: 878 (Sci-Fi), 18 (Drama)
-  const url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&with_genres=878,18&vote_count.gte=100`;
+  let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=100`;
+  
+  if (watchProviderId) {
+    url += `&with_watch_providers=${watchProviderId}&watch_region=BR`;
+  } else {
+    url += `&with_genres=878,18`;
+  }
+
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error('Erro na resposta do TMDB ao buscar descobertas.');
@@ -92,6 +97,13 @@ export async function fetchTrendingOrDiscover(apiKey: string): Promise<Movie[]> 
     const genres = (item.genre_ids || []).map((id: number) => TMDB_GENRES[id] || 'Outros').filter((g: string) => g !== 'Outros');
     const posterUrl = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : undefined;
     
+    let platforms = getMoviePlatforms(item.popularity || 0);
+    if (watchProviderId === 8) platforms = ['Netflix'];
+    else if (watchProviderId === 119) platforms = ['Prime Video'];
+    else if (watchProviderId === 1899) platforms = ['Max'];
+    else if (watchProviderId === 337) platforms = ['Disney+'];
+    else if (watchProviderId === 350) platforms = ['Apple TV+'];
+
     return {
       id: `tmdb-${item.id}`,
       title: item.title,
@@ -101,7 +113,7 @@ export async function fetchTrendingOrDiscover(apiKey: string): Promise<Movie[]> 
       genres: genres.length > 0 ? genres : ['Drama'],
       director: credits.director,
       cast: credits.cast,
-      platforms: getMoviePlatforms(item.popularity || 0),
+      platforms,
       plotType: item.overview ? item.overview.slice(0, 100) + '...' : 'Trama não detalhada.',
       plotCategory: getPlotCategory(item.genre_ids),
       similarIds: [],

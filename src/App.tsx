@@ -38,6 +38,7 @@ import { moviesDatabase } from './data/movies';
 import { standbyMoviesPool } from './data/standby';
 import { Movie, UserRating, LocalStats, AISpectatorProfile, AIRecommendation } from './types';
 import { fetchTrendingOrDiscover, searchMoviesTMDB } from './services/tmdb';
+import { signIn, signUp, logOut, onAuthStateChange, getUserDoc, saveUserDoc } from './services/firebase';
 
 
 // Predefined hot suggestion capsules for users to instantly look up movies globally using Gemini
@@ -112,70 +113,169 @@ const getStableBackdropUrl = (movieItem: Movie) => {
 };
 
 export default function App() {
-  // State recoveries from localStorage with high-security try-catch defaults to prevent rendering crashes due to corrupted legacy entries
-  const [ratings, setRatings] = useState<UserRating[]>(() => {
-    try {
-      const saved = localStorage.getItem('cineperfil_ratings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error("Erro ao ler ratings do localStorage (cineperfil_ratings):", e);
-    }
-    return [];
-  });
+  const [ratings, setRatings] = useState<UserRating[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [customMovies, setCustomMovies] = useState<Movie[]>([]);
+  const [aiProfile, setAiProfile] = useState<AISpectatorProfile | null>(null);
+  const [platformMovies, setPlatformMovies] = useState<Movie[]>([]);
 
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('cineperfil_favorites');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error("Erro ao ler favorites do localStorage (cineperfil_favorites):", e);
-    }
-    return [];
-  });
+  // Firebase Auth state listener
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false);
+  const [isSyncingFromFirestore, setIsSyncingFromFirestore] = useState(false);
 
-  const [watchlist, setWatchlist] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('cineperfil_watchlist');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error("Erro ao ler watchlist do localStorage (cineperfil_watchlist):", e);
-    }
-    return [];
-  });
+  // Login / Register state variables
+  const [isRegister, setIsRegister] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authFormLoading, setAuthFormLoading] = useState(false);
 
-  const [customMovies, setCustomMovies] = useState<Movie[]>(() => {
-    try {
-      const saved = localStorage.getItem('cineperfil_custom_movies');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error("Erro ao ler custom_movies do localStorage (cineperfil_custom_movies):", e);
-    }
-    return [];
-  });
+  // Onboarding state variables
+  const [onboardingMovies, setOnboardingMovies] = useState<Movie[]>([]);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
 
-  const [aiProfile, setAiProfile] = useState<AISpectatorProfile | null>(() => {
-    try {
-      const saved = localStorage.getItem('cineperfil_ai_profile');
-      if (saved) {
-        return JSON.parse(saved);
+  // Listen to Auth State Changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange(async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        console.log("🔐 Auth: User logged in/registered", currentUser.uid);
+        setIsSyncingFromFirestore(true);
+        try {
+          const docData = await getUserDoc(currentUser.uid);
+          if (docData) {
+            setRatings(docData.ratedMovies || docData.ratings || []);
+            setFavorites(docData.favorites || []);
+            setWatchlist(docData.watchlist || []);
+            setCustomMovies(docData.customMovies || []);
+            setAiProfile(docData.aiProfile || null);
+            setHasCompletedOnboarding(docData.hasCompletedOnboarding || false);
+            console.log("🚦 Routing: hasCompletedOnboarding is", docData.hasCompletedOnboarding);
+          } else {
+            const initialDoc = {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              hasCompletedOnboarding: false,
+              ratedMovies: [],
+              favorites: [],
+              watchlist: [],
+              customMovies: [],
+              aiProfile: null
+            };
+            await saveUserDoc(currentUser.uid, initialDoc);
+            setRatings([]);
+            setFavorites([]);
+            setWatchlist([]);
+            setCustomMovies([]);
+            setAiProfile(null);
+            setHasCompletedOnboarding(false);
+            console.log("🚦 Routing: hasCompletedOnboarding is", false);
+          }
+        } catch (error) {
+          console.error("Erro ao carregar dados do usuário do Firestore:", error);
+        } finally {
+          setIsSyncingFromFirestore(false);
+        }
+      } else {
+        setRatings([]);
+        setFavorites([]);
+        setWatchlist([]);
+        setCustomMovies([]);
+        setAiProfile(null);
+        setHasCompletedOnboarding(false);
       }
-    } catch (e) {
-      console.error("Erro ao ler ai_profile do localStorage (cineperfil_ai_profile):", e);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Auth form submit handler
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    setAuthFormLoading(true);
+
+    if (isRegister) {
+      if (password !== confirmPassword) {
+        setAuthError("As senhas não coincidem.");
+        setAuthFormLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setAuthError("A senha deve ter pelo menos 6 caracteres.");
+        setAuthFormLoading(false);
+        return;
+      }
     }
-    return null;
-  });
+
+    try {
+      if (isRegister) {
+        await signUp(email, password);
+        triggerGlobalToast("Conta criada com sucesso!", "success");
+      } else {
+        await signIn(email, password);
+        triggerGlobalToast("Bem-vindo de volta!", "success");
+      }
+    } catch (err: any) {
+      console.error("Firebase API Auth Failure:", err);
+      setAuthError(err.message || "Ocorreu um erro na autenticação.");
+    } finally {
+      setAuthFormLoading(false);
+    }
+  };
+
+  // Fetch onboarding movies
+  useEffect(() => {
+    if (user && !hasCompletedOnboarding) {
+      const loadOnboardingMovies = async () => {
+        setOnboardingLoading(true);
+        const apiKey = import.meta.env.VITE_TMDB_API_KEY;
+        if (apiKey && apiKey !== "SUA_CHAVE_AQUI" && apiKey.trim() !== "") {
+          try {
+            const res = await fetch(`https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=200`);
+            if (res.ok) {
+              const data = await res.json();
+              const results = data.results || [];
+              const top12 = results.slice(0, 12);
+              const processed = await Promise.all(top12.map(async (item: any): Promise<Movie> => {
+                return {
+                  id: `tmdb-${item.id}`,
+                  title: item.title,
+                  originalTitle: item.original_title,
+                  type: 'Filme',
+                  year: item.release_date ? new Date(item.release_date).getFullYear() : 2026,
+                  genres: ['Drama'],
+                  director: 'TMDB',
+                  cast: [],
+                  platforms: ['Netflix'],
+                  plotType: item.overview ? item.overview.slice(0, 100) + '...' : 'Trama não detalhada.',
+                  plotCategory: 'Drama',
+                  similarIds: [],
+                  synopsis: item.overview || 'Sinopse indisponível.',
+                  posterUrl: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : undefined
+                } as any;
+              }));
+              setOnboardingMovies(processed);
+              setOnboardingLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error("Erro ao carregar onboarding TMDB:", e);
+          }
+        }
+
+        // Fallback to local movies
+        setOnboardingMovies(moviesDatabase.slice(0, 12));
+        setOnboardingLoading(false);
+      };
+      loadOnboardingMovies();
+    }
+  }, [user, hasCompletedOnboarding]);
 
   // Current active viewport tab (Apple-style navigation)
   const [activeTab, setActiveTab] = useState<'catalog' | 'watchlist' | 'history' | 'analytics'>('catalog');
@@ -330,26 +430,32 @@ export default function App() {
     };
   }, [ratings]);
 
-  // Synchronize dynamic states with localStorage safely
+  // Synchronize dynamic states with localStorage and Firestore safely
   useEffect(() => {
-    localStorage.setItem('cineperfil_ratings', JSON.stringify(ratings));
-  }, [ratings]);
-
-  useEffect(() => {
-    localStorage.setItem('cineperfil_favorites', JSON.stringify(favorites));
-  }, [favorites]);
-
-  useEffect(() => {
-    localStorage.setItem('cineperfil_watchlist', JSON.stringify(watchlist));
-  }, [watchlist]);
-
-  useEffect(() => {
-    localStorage.setItem('cineperfil_custom_movies', JSON.stringify(customMovies));
-  }, [customMovies]);
-
-  useEffect(() => {
-    localStorage.setItem('cineperfil_ai_profile', JSON.stringify(aiProfile));
-  }, [aiProfile]);
+    if (user && !isSyncingFromFirestore) {
+      saveUserDoc(user.uid, {
+        ratedMovies: ratings,
+        ratings,
+        favorites,
+        watchlist,
+        customMovies,
+        aiProfile,
+        hasCompletedOnboarding
+      }).then(() => {
+        if (hasCompletedOnboarding) {
+          console.log("☁️ Firestore: Onboarding completed & saved for", user.email);
+        }
+      }).catch(err => {
+        console.error("Erro ao salvar dados no Firestore:", err);
+      });
+    } else if (!user) {
+      localStorage.setItem('cineperfil_ratings', JSON.stringify(ratings));
+      localStorage.setItem('cineperfil_favorites', JSON.stringify(favorites));
+      localStorage.setItem('cineperfil_watchlist', JSON.stringify(watchlist));
+      localStorage.setItem('cineperfil_custom_movies', JSON.stringify(customMovies));
+      localStorage.setItem('cineperfil_ai_profile', JSON.stringify(aiProfile));
+    }
+  }, [ratings, favorites, watchlist, customMovies, aiProfile, hasCompletedOnboarding, user, isSyncingFromFirestore]);
 
   // Load additional movies from the standby pool when unansweredMovies list starts going empty (never empty rule)
   useEffect(() => {
@@ -1219,6 +1325,7 @@ export default function App() {
 
   // 1. Initial TMDB discovery load on mount (VITE_TMDB_API_KEY required)
   useEffect(() => {
+    if (!user || !hasCompletedOnboarding) return;
     const loadTMDBDiscover = async () => {
       // NOTE: Configure your TMDB API Key in your .env file as VITE_TMDB_API_KEY
       const apiKey = import.meta.env.VITE_TMDB_API_KEY;
@@ -1249,7 +1356,58 @@ export default function App() {
       }
     };
     loadTMDBDiscover();
-  }, []);
+  }, [user, hasCompletedOnboarding]);
+
+  // Load platform movies from TMDB on activePlatformFilter change
+  useEffect(() => {
+    if (!user || !hasCompletedOnboarding) return;
+    if (activePlatformFilter === 'all' || activePlatformFilter === 'Cinema' || activePlatformFilter === 'Recent') return;
+
+    const loadPlatformMovies = async () => {
+      const apiKey = import.meta.env.VITE_TMDB_API_KEY;
+      if (!apiKey || apiKey === "SUA_CHAVE_AQUI" || apiKey.trim() === "") {
+        console.log("TMDB API Key não configurada para carregar filmes por plataforma. Ativando fallback local.");
+        setPlatformMovies(moviesDatabase.filter(m => m.platforms.includes(activePlatformFilter)));
+        return;
+      }
+
+      // Netflix (8), Amazon Prime Video (119), Max (1899), Disney+ (337), Apple TV+ (350)
+      let providerId = 0;
+      if (activePlatformFilter === 'Netflix') providerId = 8;
+      else if (activePlatformFilter === 'Prime Video') providerId = 119;
+      else if (activePlatformFilter === 'Max') providerId = 1899;
+      else if (activePlatformFilter === 'Disney+') providerId = 337;
+      else if (activePlatformFilter === 'Apple TV+') providerId = 350;
+
+      if (!providerId) return;
+
+      try {
+        setIsReplenishingDiscovery(true);
+        const tmdbMovies = await fetchTrendingOrDiscover(apiKey, providerId);
+        if (tmdbMovies && tmdbMovies.length > 0) {
+          // Register in customMovies
+          setCustomMovies(prev => {
+            const nextCustom = [...prev];
+            tmdbMovies.forEach(m => {
+              if (!nextCustom.some(x => x.id === m.id || x.title.toLowerCase().trim() === m.title.toLowerCase().trim())) {
+                nextCustom.push(m);
+              }
+            });
+            return nextCustom;
+          });
+          setPlatformMovies(tmdbMovies);
+          triggerGlobalToast(`⚡ Catálogo real do TMDB atualizado para ${activePlatformFilter}!`, "success");
+        }
+      } catch (err) {
+        console.error("Erro ao carregar filmes por plataforma do TMDB, usando fallback local:", err);
+        setPlatformMovies(moviesDatabase.filter(m => m.platforms.includes(activePlatformFilter)));
+      } finally {
+        setIsReplenishingDiscovery(false);
+      }
+    };
+
+    loadPlatformMovies();
+  }, [activePlatformFilter, user, hasCompletedOnboarding]);
 
   // Synchronize or initialize discoveryCarouselMovies when it is empty and we're not currently in the loading/replenishing state
   useEffect(() => {
@@ -1365,7 +1523,17 @@ export default function App() {
 
   // Main searchable Grid
   const filteredCatalog = useMemo(() => {
-    return unansweredMovies.filter(movie => {
+    const isPlatformFilter = ['Netflix', 'Prime Video', 'Max', 'Disney+', 'Apple TV+'].includes(activePlatformFilter);
+    const baseList = isPlatformFilter 
+      ? platformMovies.filter(movie => {
+          if (watchlist.includes(movie.id)) return false;
+          const rating = ratings.find(r => r.movieId === movie.id);
+          if (rating) return false;
+          return true;
+        })
+      : unansweredMovies;
+
+    return baseList.filter(movie => {
       const q = onlineSearchQuery.trim().toLowerCase();
       const matchesSearch = !q || 
         movie.title.toLowerCase().includes(q) || 
@@ -1377,7 +1545,7 @@ export default function App() {
       const matchesType = selectedType === 'all' || movie.type === selectedType;
       
       let matchesPlatform = true;
-      if (activePlatformFilter !== 'all') {
+      if (!isPlatformFilter && activePlatformFilter !== 'all') {
         if (activePlatformFilter === 'Cinema') {
           matchesPlatform = movie.platforms.includes('Cinema') || movie.year >= 2025;
         } else if (activePlatformFilter === 'Recent') {
@@ -1389,7 +1557,7 @@ export default function App() {
 
       return matchesSearch && matchesCategory && matchesType && matchesPlatform;
     });
-  }, [unansweredMovies, onlineSearchQuery, selectedCategory, selectedType, activePlatformFilter]);
+  }, [unansweredMovies, platformMovies, onlineSearchQuery, selectedCategory, selectedType, activePlatformFilter, watchlist, ratings]);
 
   // Calls the Gemini 3.5 analyzer to build the comprehensive mathematical spectating profile
   const triggerAIAnalysis = async () => {
@@ -2493,6 +2661,306 @@ export default function App() {
     );
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center text-zinc-150 relative font-sans">
+        {/* Background Cinematic Ambient Lights */}
+        <div className="absolute top-[-15%] left-[-20%] w-[600px] h-[600px] bg-[#00E5FF]/5 rounded-full blur-[180px] pointer-events-none z-0"></div>
+        <div className="relative w-16 h-16 flex items-center justify-center mb-4 z-10">
+          <div className="w-full h-full rounded-full border-4 border-zinc-900 border-t-[#00E5FF] animate-spin" />
+          <Sparkles className="w-6 h-6 text-[#00E5FF] absolute animate-pulse" />
+        </div>
+        <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase z-10">Iniciando Stream Radar...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans flex flex-col items-center justify-center overflow-y-auto px-4 py-8 selection:bg-[#00E5FF]/30 selection:text-white relative">
+        {/* Background Cinematic Ambient Lights */}
+        <div className="absolute top-[-15%] left-[-20%] w-[800px] h-[800px] bg-[#00E5FF]/10 rounded-full blur-[180px] pointer-events-none z-0"></div>
+        <div className="absolute bottom-[-5%] right-[-10%] w-[600px] h-[600px] bg-indigo-900/10 rounded-full blur-[140px] pointer-events-none z-0"></div>
+
+        <div className="max-w-md w-full bg-zinc-950/60 border border-white/10 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl relative z-10 flex flex-col gap-6 text-center">
+          
+          {/* Brand */}
+          <div className="flex flex-col items-center gap-3 select-none">
+            <div className="bg-white/5 p-3.5 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-center">
+              <svg className="w-8 h-8 text-[#00E5FF] drop-shadow-[0_0_8px_rgba(0,229,255,0.45)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="18" r="1.5" fill="currentColor" />
+                <path d="M8.5 14.5a5 5 0 0 1 7 0" />
+                <path d="M5 11c3.5-3.5 10.5-3.5 14 0" />
+              </svg>
+            </div>
+            <div>
+              <div className="flex items-center justify-center gap-1.5">
+                <h1 className="font-display text-3xl font-extrabold tracking-tight text-white font-sans">
+                  Stream <span className="text-zinc-400">Radar</span>
+                </h1>
+                <span className="text-[9px] font-mono leading-none tracking-widest text-[#050505] font-black bg-[#00E5FF] px-1.5 py-0.5 rounded shadow-sm">
+                  PRO
+                </span>
+              </div>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold font-mono mt-1">Curadoria & Feedback Instantâneo</p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-lg font-bold text-white tracking-tight font-sans">
+              {isRegister ? "Criar nova conta" : "Entrar no sistema"}
+            </h2>
+            <p className="text-xs text-zinc-400 font-sans">
+              {isRegister ? "Registre-se para sincronizar seu Perfil Cognitivo" : "Acesse seu radar de recomendações personalizadas"}
+            </p>
+          </div>
+
+          <form onSubmit={handleAuthSubmit} className="space-y-4 text-left">
+            <div>
+              <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Endereço de E-mail</label>
+              <input 
+                type="email" 
+                required 
+                placeholder="nome@provedor.com" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-[#070709]/80 border border-white/10 text-xs text-white rounded-xl px-4 py-3 placeholder-zinc-650 focus:outline-none focus:border-[#00E5FF] focus:shadow-[0_0_15px_rgba(0,229,255,0.15)] transition-all font-sans"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Sua Senha</label>
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  placeholder="••••••••" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-[#070709]/80 border border-white/10 text-xs text-white rounded-xl pl-4 pr-10 py-3 placeholder-zinc-650 focus:outline-none focus:border-[#00E5FF] focus:shadow-[0_0_15px_rgba(0,229,255,0.15)] transition-all font-sans"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3 text-zinc-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {isRegister && (
+              <div>
+                <label className="text-[10px] text-zinc-405 block mb-1 font-mono uppercase font-semibold">Confirmar Senha</label>
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  placeholder="••••••••" 
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full bg-[#070709]/80 border border-white/10 text-xs text-white rounded-xl px-4 py-3 placeholder-zinc-650 focus:outline-none focus:border-[#00E5FF] focus:shadow-[0_0_15px_rgba(0,229,255,0.15)] transition-all font-sans"
+                />
+              </div>
+            )}
+
+            {authError && (
+              <div className="bg-rose-950/20 border border-rose-500/25 p-3 rounded-xl text-rose-300 text-xs flex gap-2 items-center">
+                <AlertCircle className="w-4.5 h-4.5 text-rose-400 shrink-0" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={authFormLoading}
+              className="w-full bg-[#00E5FF] hover:bg-cyan-300 text-zinc-950 font-black py-3 rounded-xl text-xs sm:text-sm font-mono tracking-widest uppercase cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 shadow-[0_0_20px_rgba(0,229,255,0.2)] hover:shadow-[0_0_35px_rgba(0,229,255,0.45)] mt-2 flex items-center justify-center gap-1.5"
+            >
+              {authFormLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Prosseguir"}
+            </button>
+          </form>
+
+          <div className="border-t border-white/5 pt-4">
+            <button
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setAuthError(null);
+              }}
+              className="text-xs text-[#00E5FF] hover:underline cursor-pointer font-sans"
+            >
+              {isRegister ? "Já possui conta? Faça login" : "Ainda não tem conta? Cadastre-se"}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // Mandatory Onboarding overlay for logged in users who haven't completed onboarding
+  const onboardingRatedCount = onboardingMovies.filter(m => ratings.some(r => r.movieId === m.id && r.watched)).length;
+
+  if (user && !hasCompletedOnboarding) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans px-4 py-8 flex flex-col items-center justify-center overflow-y-auto selection:bg-[#00E5FF]/30 selection:text-white relative">
+        {/* Background Cinematic Ambient Lights */}
+        <div className="absolute top-[10%] left-[10%] w-[500px] h-[500px] bg-[#00E5FF]/5 rounded-full blur-[150px] pointer-events-none" />
+        <div className="absolute bottom-[10%] right-[10%] w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
+
+        <div className="max-w-4xl w-full bg-zinc-950/60 border border-white/10 backdrop-blur-2xl rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 flex flex-col gap-6 text-center">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 bg-[#00E5FF]/10 border border-[#00E5FF]/35 px-3.5 py-1.5 rounded-full mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-[#00E5FF] animate-pulse" />
+              <span className="text-[10px] font-mono font-bold tracking-widest text-[#00E5FF] uppercase">Onboarding Inicial</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-sans font-black text-white tracking-tight">
+              Bem-vindo ao Stream Radar!
+            </h2>
+            <p className="text-xs md:text-sm text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+              Para decodificar o seu perfil cognitivo de espectador e treinar nossa inteligência artificial, avalie pelo menos <strong className="text-white">5 filmes</strong> populares da lista abaixo.
+            </p>
+          </div>
+
+          {onboardingLoading ? (
+            <div className="py-20 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" />
+              <span className="text-xs text-zinc-505 font-mono">Carregando acervo popular...</span>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Progress Bar */}
+              <div className="bg-[#111111]/80 border border-white/5 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 text-left font-sans">
+                <div>
+                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block">Progresso da Sintonia</span>
+                  <span className="text-xs font-semibold text-zinc-200">
+                    {onboardingRatedCount >= 5 
+                      ? "✨ Sintonia mínima atingida! Você pode continuar avaliando ou entrar agora." 
+                      : `Avalie mais ${5 - onboardingRatedCount} filme(s) para liberar o acesso.`}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-4 w-full sm:w-auto shrink-0">
+                  <div className="w-36 bg-zinc-900 h-2 rounded-full overflow-hidden border border-white/5">
+                    <div 
+                      className="bg-gradient-to-r from-[#00E5FF] to-[#0A84FF] h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, (onboardingRatedCount / 5) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono font-bold text-[#00E5FF] bg-[#00E5FF]/10 border border-[#00E5FF]/25 px-2.5 py-1 rounded-md shrink-0">
+                    {onboardingRatedCount} / 5
+                  </span>
+                </div>
+              </div>
+
+              {/* Onboarding grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-h-[420px] overflow-y-auto pr-2 scrollbar-thin">
+                {onboardingMovies.map((movie) => {
+                  const rating = ratings.find(r => r.movieId === movie.id);
+                  const isRated = rating?.watched || false;
+                  
+                  return (
+                    <div 
+                      key={movie.id} 
+                      className={`bg-zinc-900/40 border rounded-2xl p-3 flex flex-col justify-between transition-all duration-300 text-left relative overflow-hidden group ${
+                        isRated 
+                          ? 'border-[#00E5FF]/40 bg-[#00E5FF]/5 shadow-[0_0_15px_rgba(0,229,255,0.05)]' 
+                          : 'border-white/5 hover:border-white/15'
+                      }`}
+                    >
+                      <div className="aspect-[2/3] w-full overflow-hidden rounded-xl bg-[#050505] border border-white/5 mb-3 relative">
+                        <img 
+                          src={getStablePosterUrl(movie)} 
+                          alt={movie.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = getFailsafePosterUrl(movie);
+                          }}
+                        />
+                        {isRated && (
+                          <div className="absolute top-2 right-2 bg-[#00E5FF] text-zinc-950 p-1.5 rounded-full shadow-md z-10">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-0.5 mb-3">
+                        <h4 className="text-xs font-bold text-white line-clamp-1 group-hover:text-[#00E5FF] transition-colors">
+                          {movie.title}
+                        </h4>
+                        <p className="text-[9px] text-zinc-500 font-mono">{movie.year}</p>
+                      </div>
+
+                      {/* Onboarding simple rating options */}
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleChangeReaction(movie, 'love')}
+                          className={`flex-1 py-1.5 rounded-lg text-center text-[10px] transition-all cursor-pointer ${
+                            rating?.liked === 'love' 
+                              ? 'bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 font-bold scale-105' 
+                              : 'bg-zinc-950/60 text-zinc-400 border border-white/5 hover:bg-zinc-900'
+                          }`}
+                          title="Amei"
+                        >
+                          ❤️
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleChangeReaction(movie, 'like')}
+                          className={`flex-1 py-1.5 rounded-lg text-center text-[10px] transition-all cursor-pointer ${
+                            rating?.liked === 'like' 
+                              ? 'bg-[#00E5FF]/20 text-[#00E5FF] border border-[#00E5FF]/40 font-bold scale-105' 
+                              : 'bg-zinc-950/60 text-zinc-400 border border-white/5 hover:bg-zinc-900'
+                          }`}
+                          title="Gostei"
+                        >
+                          👍
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleChangeReaction(movie, 'dislike')}
+                          className={`flex-1 py-1.5 rounded-lg text-center text-[10px] transition-all cursor-pointer ${
+                            rating?.liked === 'dislike' 
+                              ? 'bg-rose-950/20 text-rose-450 border border-rose-500/30 font-bold scale-105' 
+                              : 'bg-zinc-950/60 text-zinc-400 border border-white/5 hover:bg-zinc-900'
+                          }`}
+                          title="Não Gostei"
+                        >
+                          👎
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="button"
+                disabled={onboardingRatedCount < 5}
+                onClick={async () => {
+                  try {
+                    setHasCompletedOnboarding(true);
+                    triggerGlobalToast("Onboarding concluído! Sincronizando seu perfil...", "success");
+                    // Trigger profile generation after onboarding
+                    setTimeout(() => {
+                      triggerAIAnalysis();
+                    }, 500);
+                  } catch (e) {
+                    triggerGlobalToast("Erro ao finalizar onboarding.", "error");
+                  }
+                }}
+                className="w-full bg-[#00E5FF] hover:bg-cyan-300 text-zinc-950 font-black py-3 rounded-xl text-xs sm:text-sm font-mono tracking-widest uppercase cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 shadow-[0_0_20px_rgba(0,229,255,0.25)] hover:shadow-[0_0_30px_rgba(0,229,255,0.45)]"
+              >
+                ✔ Finalizar Sintonia & Entrar no App
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-100 font-sans cinema-grid pb-24 selection:bg-[#00E5FF]/30 selection:text-white relative overflow-hidden">
       
@@ -2586,20 +3054,30 @@ export default function App() {
           {/* Top Reset actions on the right */}
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <span className="text-[9px] text-zinc-500 block font-mono uppercase tracking-widest">Base Pessoal</span>
               <span className="text-xs text-indigo-400 font-bold font-mono">
-                {localStats.totalWatched} / {allMovies.length} avaliados
+                Base Pessoal: {localStats.totalWatched} produções avaliadas
               </span>
             </div>
 
-            {ratings.length > 0 && (
-              <button 
-                onClick={handleClearData}
-                id="btn-redefinir-dados-top"
-                className="text-[10px] text-rose-450 hover:text-rose-400 hover:bg-rose-950/20 transition-all px-3 py-1.5 rounded-xl border border-white/5 hover:border-rose-550/30 font-mono"
-              >
-                Limpar Banco
-              </button>
+            {user && (
+              <div className="flex items-center gap-2.5 border-l border-white/10 pl-4">
+                <span className="text-[10px] text-zinc-400 hidden lg:block font-mono max-w-[120px] truncate" title={user.email}>
+                  {user.email}
+                </span>
+                <button 
+                  onClick={async () => {
+                    try {
+                      await logOut();
+                      triggerGlobalToast("Você saiu com sucesso.", "info");
+                    } catch (e) {
+                      triggerGlobalToast("Erro ao sair.", "error");
+                    }
+                  }}
+                  className="text-[10px] text-zinc-405 hover:text-white hover:bg-zinc-900 border border-white/10 hover:border-white/20 transition-all px-3 py-1.5 rounded-xl font-mono cursor-pointer font-semibold"
+                >
+                  Sair
+                </button>
+              </div>
             )}
           </div>
 
@@ -3481,6 +3959,46 @@ export default function App() {
         {/* 4. PROFILE ANALYTICS & AI PORT TAB */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
+            {ratings.length < 20 ? (
+              <div className="bg-zinc-950/60 border border-white/10 backdrop-blur-2xl rounded-3xl p-12 text-center flex flex-col items-center justify-center gap-8 py-24 shadow-[0_0_50px_rgba(0,229,255,0.03)] min-h-[500px] relative overflow-hidden max-w-2xl mx-auto mt-6">
+                {/* Background ambient glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] bg-[#00E5FF]/5 rounded-full blur-[100px] pointer-events-none" />
+                
+                {/* Pristine Electric Cyan (#00E5FF) pulsing radar circle */}
+                <div className="relative w-28 h-28 flex items-center justify-center z-10">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-[#00E5FF]/10 animate-ping opacity-75"></span>
+                  <div className="relative rounded-full h-20 w-20 bg-gradient-to-tr from-[#00E5FF] to-[#0080FF] p-[2px] shadow-[0_0_30px_rgba(0,229,255,0.4)] animate-spin">
+                    <div className="w-full h-full bg-zinc-950 rounded-full flex items-center justify-center">
+                      <Sparkles className="w-8 h-8 text-[#00E5FF] animate-pulse" />
+                    </div>
+                  </div>
+                  {/* Absolute radar sweeping line */}
+                  <div className="absolute inset-0 border border-[#00E5FF]/20 rounded-full animate-pulse scale-125 pointer-events-none" />
+                  <div className="absolute inset-0 border border-[#00E5FF]/10 rounded-full animate-pulse scale-150 pointer-events-none" />
+                </div>
+
+                <div className="space-y-3 z-10 max-w-md">
+                  <h3 className="text-xl md:text-2xl font-sans font-black text-white tracking-tight leading-tight">
+                    Calibrando seu perfil cognitivo...
+                  </h3>
+                  <p className="text-sm md:text-base text-zinc-300 font-sans leading-relaxed">
+                    Avalie mais <strong className="text-[#00E5FF] font-black">{20 - ratings.length}</strong> produções para revelar seu Arquétipo.
+                  </p>
+                </div>
+
+                {/* Progress bar inside the locked view */}
+                <div className="w-full max-w-xs bg-zinc-900 h-2.5 rounded-full overflow-hidden border border-white/5 z-10">
+                  <div 
+                    className="bg-gradient-to-r from-[#00E5FF] to-[#0A84FF] h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(0,229,255,0.5)]"
+                    style={{ width: `${Math.min(100, (ratings.length / 20) * 100)}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase z-10">
+                  Sintonia atual: {ratings.length} / 20 avaliações
+                </div>
+              </div>
+            ) : (
+              <>
             
             {/* Top overview status board */}
             <div className="bg-zinc-900/40 p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
@@ -3510,6 +4028,14 @@ export default function App() {
                 {ratings.length === 0 && (
                   <span className="text-[10px] text-zinc-550 font-mono text-center">Avalie ao menos 1 título para desbloquear</span>
                 )}
+              </div>
+            </div>
+
+            {/* Continuous profile banner */}
+            <div className="bg-zinc-950/60 border border-[#00E5FF]/20 px-5 py-4 rounded-2xl flex items-center gap-3 text-left shadow-lg">
+              <span className="text-base shrink-0 select-none">💡</span>
+              <div className="text-xs text-zinc-350">
+                <strong className="text-[#00E5FF] font-bold">Análise em andamento.</strong> Avalie mais produções para refinar a precisão do seu Arquétipo.
               </div>
             </div>
 
@@ -3907,6 +4433,8 @@ export default function App() {
 
             </div>
 
+              </>
+            )}
           </div>
         )}
 
