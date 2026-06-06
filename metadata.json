@@ -1,0 +1,6 @@
+{
+  "name": "Stream Radar",
+  "description": "Curadoria de conteúdo premium com feedback instantâneo e análise inteligente de cinéfilo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
