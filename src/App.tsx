@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Film, 
   Sparkles, 
@@ -241,7 +241,11 @@ export default function App() {
             if (res.ok) {
               const data = await res.json();
               const results = data.results || [];
-              const top12 = results.slice(0, 12);
+              // ── POSTER GATEKEEPER ──
+              const withPoster = results.filter(
+                (item: any) => item.poster_path !== null && item.poster_path !== undefined && item.poster_path !== ''
+              );
+              const top12 = withPoster.slice(0, 12);
               const processed = await Promise.all(top12.map(async (item: any): Promise<Movie> => {
                 return {
                   id: `tmdb-${item.id}`,
@@ -293,6 +297,11 @@ export default function App() {
   const [onlineSearchLoading, setOnlineSearchLoading] = useState(false);
   const [onlineSearchResult, setOnlineSearchResult] = useState<Movie[] | null>(null);
   const [onlineSearchError, setOnlineSearchError] = useState<string | null>(null);
+
+  // Debounced TMDB live search results (separate from manual AI search)
+  const [tmdbSearchResults, setTmdbSearchResults] = useState<Movie[] | null>(null);
+  const [tmdbSearchLoading, setTmdbSearchLoading] = useState(false);
+  const debounceTimerRef = React.useRef<any>(null);
 
   // Focus modal detailed view
   const [focusedMovie, setFocusedMovie] = useState<Movie | null>(null);
@@ -630,7 +639,70 @@ export default function App() {
     if (!onlineSearchQuery || onlineSearchQuery.trim().length < 3) {
       setOnlineSearchResult(null);
       setOnlineSearchError(null);
+      setTmdbSearchResults(null);
     }
+  }, [onlineSearchQuery]);
+
+  // ── DEBOUNCED TMDB LIVE SEARCH ─────────────────────────────────────────────
+  // Fires 500ms after the user stops typing, calls /search/movie, applies the
+  // poster gatekeeper, and writes results to tmdbSearchResults.
+  useEffect(() => {
+    const query = onlineSearchQuery.trim();
+    if (query.length < 3) {
+      setTmdbSearchResults(null);
+      return;
+    }
+
+    // Clear previous debounce timer
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
+    debounceTimerRef.current = setTimeout(async () => {
+      const apiKey = import.meta.env.VITE_TMDB_API_KEY;
+      if (!apiKey || apiKey === 'SUA_CHAVE_AQUI' || apiKey.trim() === '') return;
+
+      setTmdbSearchLoading(true);
+      try {
+        const url = `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=pt-BR&include_adult=false`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('TMDB search failed');
+        const data = await res.json();
+        const results: any[] = data.results || [];
+
+        // ── POSTER GATEKEEPER ──────────────────────────────────────────────
+        const withPoster = results.filter(
+          (item) => item.poster_path !== null && item.poster_path !== undefined && item.poster_path !== ''
+        );
+
+        const mapped: Movie[] = withPoster.slice(0, 12).map((item): Movie => ({
+          id: `tmdb-${item.id}`,
+          title: item.title,
+          originalTitle: item.original_title,
+          type: 'Filme',
+          year: item.release_date ? new Date(item.release_date).getFullYear() : 2026,
+          genres: ['Drama'],
+          director: 'Não informado',
+          cast: [],
+          platforms: ['TMDB'],
+          plotType: item.overview ? item.overview.slice(0, 100) + '...' : 'Trama não detalhada.',
+          plotCategory: 'Drama',
+          similarIds: [],
+          synopsis: item.overview || 'Sinopse indisponível.',
+          posterUrl: `https://image.tmdb.org/t/p/w500${item.poster_path}`,
+        } as any));
+
+        setTmdbSearchResults(mapped.length > 0 ? mapped : null);
+        console.log(`🔍 TMDB Debounce: ${mapped.length} resultados com poster para "${query}"`);
+      } catch (err) {
+        console.warn('Debounce TMDB search error:', err);
+        setTmdbSearchResults(null);
+      } finally {
+        setTmdbSearchLoading(false);
+      }
+    }, 500);
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
   }, [onlineSearchQuery]);
 
   // Reset pagination limit when active platform, type, category or search query changes
@@ -3553,155 +3625,152 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ONLINE IA LOOKUP RESULTS */}
-              <AnimatePresence>
-                {onlineSearchError && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="mt-4 bg-rose-950/20 border border-rose-500/25 p-3 rounded-xl text-rose-300 text-xs flex gap-2 items-center text-left"
-                  >
-                    <AlertCircle className="w-4.5 h-4.5 text-rose-400 shrink-0" />
-                    <span>{onlineSearchError}</span>
-                  </motion.div>
-                )}
+              {/* ── INTEGRATED ACTIVE CATALOG & SUCCESSES DISPLAY ── */}
+              <div className="mt-8 pt-8 border-t border-white/5 space-y-5 text-left">
 
-                {onlineSearchResult && onlineSearchResult.length > 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="mt-6 space-y-4 text-left"
-                  >
-                    <div className="flex items-center justify-between border-b border-indigo-500/25 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
-                        <h3 className="text-xs font-display font-black text-white uppercase tracking-wider">
-                          Resultados Oficiais pela IA (Canônico / Franquia):
+                {onlineSearchQuery.trim().length >= 3 ? (
+                  /* ── DEBOUNCED TMDB LIVE SEARCH MODE ── */
+                  <AnimatePresence mode="wait">
+                    {tmdbSearchLoading && (
+                      <motion.div
+                        key="tmdb-loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="flex flex-col items-center gap-4 py-16"
+                      >
+                        <div className="relative w-14 h-14">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-[#00E5FF]/10 animate-ping" />
+                          <div className="relative rounded-full h-14 w-14 bg-gradient-to-tr from-[#00E5FF]/20 to-indigo-500/20 border border-[#00E5FF]/30 flex items-center justify-center">
+                            <Loader2 className="w-5 h-5 text-[#00E5FF] animate-spin" />
+                          </div>
+                        </div>
+                        <p className="text-xs text-zinc-400 font-mono">Consultando arquivos cinematográficos...</p>
+                      </motion.div>
+                    )}
+
+                    {!tmdbSearchLoading && tmdbSearchResults && tmdbSearchResults.length > 0 && (
+                      <motion.div
+                        key="tmdb-results"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="space-y-5"
+                      >
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div>
+                            <h3 className="font-display font-extrabold text-base text-white flex items-center gap-2">
+                              <Search className="w-4.5 h-4.5 text-[#00E5FF]" />
+                              🔍 Resultados para &ldquo;{onlineSearchQuery.trim()}&rdquo;
+                            </h3>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              Títulos verificados com arte oficial do TMDB
+                            </p>
+                          </div>
+                          <span className="text-xs text-[#00E5FF] bg-[#00E5FF]/10 px-2.5 py-1 rounded-xl border border-[#00E5FF]/20 font-mono shrink-0">
+                            {tmdbSearchResults.length} encontrados
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                          <AnimatePresence mode="popLayout">
+                            {tmdbSearchResults.map((movie, idx) => renderAppleMovieCard(movie, (
+                              <div className="absolute top-2.5 left-2.5 bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-[8px] font-mono font-bold px-2 py-0.5 rounded-md backdrop-blur-md shadow-md z-10 uppercase tracking-wider">
+                                🔍 TMDB Match
+                              </div>
+                            ), `tmdb-s-${idx}`))}
+                          </AnimatePresence>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {!tmdbSearchLoading && (tmdbSearchResults === null || tmdbSearchResults.length === 0) && (
+                      <motion.div
+                        key="tmdb-empty"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-center py-16 flex flex-col items-center gap-3"
+                      >
+                        <div className="w-16 h-16 rounded-full bg-zinc-900/60 border border-white/5 flex items-center justify-center mb-1">
+                          <Search className="w-6 h-6 text-zinc-600" />
+                        </div>
+                        <p className="text-sm font-display font-semibold text-zinc-400 tracking-wide">
+                          Nenhum registro encontrado nos arquivos.
+                        </p>
+                        <p className="text-xs text-zinc-600 max-w-xs">
+                          Verifique a ortografia ou tente um termo diferente.
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                ) : (
+                  /* ── NORMAL CATALOG MODE ── */
+                  <>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="font-display font-extrabold text-base text-white flex items-center gap-2">
+                          <Layers className="w-4.5 h-4.5 text-indigo-400" />
+                          {activePlatformFilter === 'Netflix' && "🔥 Maiores Sucessos na Netflix"}
+                          {activePlatformFilter === 'Prime Video' && "🔥 Maiores Sucessos no Amazon Prime Video"}
+                          {activePlatformFilter === 'Max' && "🔥 Maiores Sucessos na Max"}
+                          {activePlatformFilter === 'Disney+' && "🔥 Maiores Sucessos no Disney+"}
+                          {activePlatformFilter === 'Apple TV+' && "🔥 Maiores Sucessos na Apple TV+"}
+                          {activePlatformFilter === 'Cinema' && "🍿 Em Cartaz nos Cinemas"}
+                          {activePlatformFilter === 'Recent' && "🎬 Lançamentos Recentes no Cinema"}
+                          {activePlatformFilter === 'all' && "🎬 Todos os Sucessos do Catálogo"}
                         </h3>
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          {activePlatformFilter === 'all' 
+                            ? "Navegue pelo nosso catálogo geral de obras consagradas" 
+                            : `Obras mais aclamadas e populares distribuídas sob esta plataforma`}
+                        </p>
                       </div>
-                      <span className="text-[10px] text-zinc-500 font-mono bg-zinc-900 border border-white/5 px-2.5 py-0.5 rounded-full">
-                        {onlineSearchResult.length} títulos localizados
+                      <span className="text-xs text-indigo-400 bg-indigo-950/40 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-mono">
+                        {filteredCatalog.length} correspondentes
                       </span>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                      {onlineSearchResult.map((movie, idx) => renderAppleMovieCard(movie, (
-                        <div className="absolute top-2.5 right-2.5 bg-amber-500 text-zinc-950 text-[8.5px] font-mono font-bold px-2 py-0.5 rounded-full shadow-md z-10 uppercase tracking-wider">
-                          ✨ IA Global Match
-                        </div>
-                      ), idx))}
+                      <AnimatePresence mode="popLayout">
+                        {filteredCatalog.slice(0, catalogLimit).map((movie, idx) => renderAppleMovieCard(movie,
+                          proximityMatches[movie.id] ? (
+                            <div className="absolute -top-2.5 left-4 z-15 bg-gradient-to-r from-amber-500 via-indigo-650 to-purple-600 font-bold tracking-wider uppercase text-[8.5px] px-2.5 py-0.5 rounded-full border border-indigo-500/30 flex items-center gap-1 leading-none shadow-md">
+                              ⭐ Estilo idêntico ao que curtiu: {proximityMatches[movie.id].movieTitle}
+                            </div>
+                          ) : undefined,
+                          idx
+                        ))}
+                      </AnimatePresence>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              {/* INTEGRATED ACTIVE CATALOG & SUCCESSES DISPLAY */}
-              <div className="mt-8 pt-8 border-t border-white/5 space-y-5 text-left">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-display font-extrabold text-base text-white flex items-center gap-2">
-                      <Layers className="w-4.5 h-4.5 text-indigo-400" />
-                      {activePlatformFilter === 'Netflix' && "🔥 Maiores Sucessos na Netflix"}
-                      {activePlatformFilter === 'Prime Video' && "🔥 Maiores Sucessos no Amazon Prime Video"}
-                      {activePlatformFilter === 'Max' && "🔥 Maiores Sucessos na Max"}
-                      {activePlatformFilter === 'Disney+' && "🔥 Maiores Sucessos no Disney+"}
-                      {activePlatformFilter === 'Apple TV+' && "🔥 Maiores Sucessos na Apple TV+"}
-                      {activePlatformFilter === 'Cinema' && "🍿 Em Cartaz nos Cinemas"}
-                      {activePlatformFilter === 'Recent' && "🎬 Lançamentos Recentes no Cinema"}
-                      {activePlatformFilter === 'all' && (onlineSearchQuery ? "🔍 Resultados Correspondentes no Acervo" : "🎬 Todos os Sucessos do Catálogo")}
-                    </h3>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      {activePlatformFilter === 'all' 
-                        ? "Navegue pelo nosso catálogo geral de obras consagradas" 
-                        : `Obras mais aclamadas e populares distribuídas sob esta plataforma`}
-                    </p>
-                  </div>
-                  
-                  <span className="text-xs text-indigo-400 bg-indigo-950/40 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-mono">
-                    {filteredCatalog.length} correspondentes
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  <AnimatePresence mode="popLayout">
-                     {filteredCatalog.slice(0, catalogLimit).map((movie, idx) => renderAppleMovieCard(movie, 
-                       proximityMatches[movie.id] ? (
-                         <div className="absolute -top-2.5 left-4 z-15 bg-gradient-to-r from-amber-500 via-indigo-650 to-purple-600 font-bold tracking-wider uppercase text-[8.5px] px-2.5 py-0.5 rounded-full border border-indigo-500/30 flex items-center gap-1 leading-none shadow-md">
-                           ⭐ Estilo idêntico ao que curtiu: {proximityMatches[movie.id].movieTitle}
-                         </div>
-                       ) : undefined,
-                       idx
-                     ))}
-                  </AnimatePresence>
-                </div>
-
-                {filteredCatalog.length > catalogLimit && (
-                  <div className="flex justify-center pt-4 pb-8">
-                    <button
-                      type="button"
-                      onClick={() => setCatalogLimit(prev => prev + 12)}
-                      className="bg-zinc-900 border border-white/10 hover:border-[#00E5FF]/40 hover:bg-[#00E5FF]/10 text-[#A1A1A6] hover:text-[#00E5FF] font-semibold px-6 py-2.5 rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-95"
-                    >
-                      <span>Carregar mais títulos</span>
-                      <ChevronRight className="w-3.5 h-3.5 rotate-90 text-[#00E5FF]" />
-                    </button>
-                  </div>
-                )}
-
-                {filteredCatalog.length === 0 && (
-                  <div className="text-center py-14 flex flex-col items-center gap-4 bg-zinc-950/20 border border-white/5 rounded-3xl p-8 max-w-xl mx-auto shadow-inner">
-                    {unansweredMovies.length === 0 ? (
-                      <>
-                        <Sparkles className="w-10 h-10 text-indigo-400 animate-pulse mb-1" />
-                        <h4 className="font-display font-black text-white text-sm">Uau! Você classificou todo o acervo! 🎬</h4>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
-                          Não sobrou nenhum título pendente para avaliar no momento. Que tal verificar o seu **Perfil Cognitivo IA** ou redefinir o banco para começar de novo?
-                        </p>
-                        
-                        <div className="flex flex-wrap gap-3.5 justify-center mt-2">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('analytics')}
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                            Ver Perfil Inteligente IA
-                          </button>
-                          
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm("Deseja redefinir todo o banco local para poder classificar novamente?")) {
-                                handleResetAllRatingsForce();
-                              }
-                            }}
-                            className="bg-zinc-900 border border-white/10 hover:border-indigo-500/35 hover:bg-indigo-950/20 text-zinc-300 hover:text-indigo-400 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                          >
-                            🔁 Resetar & Começar de Novo
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <Compass className="w-10 h-10 text-zinc-600" />
-                        <p className="text-xs text-zinc-400">Nenhum título local localizado correspondendo a essa combinação de filtros.</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOnlineSearchQuery('');
-                            setSelectedCategory('all');
-                            setSelectedType('all');
-                            setActivePlatformFilter('all');
-                          }}
-                          className="text-xs text-indigo-400 hover:underline cursor-pointer"
-                        >
-                          Limpar filtros de busca ativos
+                    {filteredCatalog.length > catalogLimit && (
+                      <div className="flex justify-center pt-4 pb-8">
+                        <button type="button" onClick={() => setCatalogLimit(prev => prev + 12)} className="bg-zinc-900 border border-white/10 hover:border-[#00E5FF]/40 hover:bg-[#00E5FF]/10 text-[#A1A1A6] hover:text-[#00E5FF] font-semibold px-6 py-2.5 rounded-xl text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-95">
+                          <span>Carregar mais títulos</span>
+                          <ChevronRight className="w-3.5 h-3.5 rotate-90 text-[#00E5FF]" />
                         </button>
-                      </>
+                      </div>
                     )}
-                  </div>
+
+                    {filteredCatalog.length === 0 && (
+                      <div className="text-center py-14 flex flex-col items-center gap-4 bg-zinc-950/20 border border-white/5 rounded-3xl p-8 max-w-xl mx-auto shadow-inner">
+                        {unansweredMovies.length === 0 ? (
+                          <>
+                            <Sparkles className="w-10 h-10 text-indigo-400 animate-pulse mb-1" />
+                            <h4 className="font-display font-black text-white text-sm">Uau! Você classificou todo o acervo! 🎬</h4>
+                            <p className="text-xs text-zinc-400 leading-relaxed">Não sobrou nenhum título pendente.</p>
+                            <button type="button" onClick={() => setActiveTab('analytics')} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">Ver Perfil</button>
+                          </>
+                        ) : (
+                          <>
+                            <Compass className="w-10 h-10 text-zinc-600" />
+                            <p className="text-xs text-zinc-400">Nenhum título local localizado.</p>
+                            <button type="button" onClick={() => { setOnlineSearchQuery(''); setSelectedCategory('all'); setSelectedType('all'); setActivePlatformFilter('all'); }} className="text-xs text-indigo-400 hover:underline cursor-pointer">Limpar filtros</button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </section>

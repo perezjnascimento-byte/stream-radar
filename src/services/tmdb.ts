@@ -90,8 +90,14 @@ export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: 
   const data = await res.json();
   const results = data.results || [];
 
-  // Fetch credits in parallel for the top 8 results
-  const topResults = results.slice(0, 8);
+  // ── POSTER GATEKEEPER ──────────────────────────────────────────────────
+  // Discard any movie that lacks official TMDB artwork before fetching credits.
+  const withPoster = results.filter(
+    (item: any) => item.poster_path !== null && item.poster_path !== undefined && item.poster_path !== ''
+  );
+
+  // Fetch credits in parallel for the top 8 poster-verified results
+  const topResults = withPoster.slice(0, 8);
   const movies = await Promise.all(topResults.map(async (item: any): Promise<Movie> => {
     const credits = await fetchMovieCredits(item.id, apiKey);
     const genres = (item.genre_ids || []).map((id: number) => TMDB_GENRES[id] || 'Outros').filter((g: string) => g !== 'Outros');
@@ -139,8 +145,14 @@ export async function searchMoviesTMDB(query: string, apiKey: string): Promise<M
   const data = await res.json();
   const results = data.results || [];
 
-  // Fetch credits in parallel for the top 6 results
-  const topResults = results.slice(0, 6);
+  // ── POSTER GATEKEEPER ──────────────────────────────────────────────────
+  // Discard any movie that lacks official TMDB artwork before fetching credits.
+  const withPoster = results.filter(
+    (item: any) => item.poster_path !== null && item.poster_path !== undefined && item.poster_path !== ''
+  );
+
+  // Fetch credits in parallel for the top 6 poster-verified results
+  const topResults = withPoster.slice(0, 6);
   const movies = await Promise.all(topResults.map(async (item: any): Promise<Movie> => {
     const credits = await fetchMovieCredits(item.id, apiKey);
     const genres = (item.genre_ids || []).map((id: number) => TMDB_GENRES[id] || 'Outros').filter((g: string) => g !== 'Outros');
