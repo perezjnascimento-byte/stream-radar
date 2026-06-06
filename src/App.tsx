@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Film, 
   Sparkles, 
@@ -289,6 +289,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [activePlatformFilter, setActivePlatformFilter] = useState<string>('all');
+  const [isPlatformLoading, setIsPlatformLoading] = useState(false);
   const [catalogLimit, setCatalogLimit] = useState<number>(12);
 
 
@@ -1432,32 +1433,42 @@ export default function App() {
 
   // Load platform movies from TMDB on activePlatformFilter change
   useEffect(() => {
-    if (!user || !hasCompletedOnboarding) return;
-    if (activePlatformFilter === 'all' || activePlatformFilter === 'Cinema' || activePlatformFilter === 'Recent') return;
+    const PROVIDER_PLATFORMS = ['Netflix', 'Prime Video', 'Max', 'Disney+', 'Apple TV+'];
+    const isPlatformProvider = PROVIDER_PLATFORMS.includes(activePlatformFilter);
+
+    // Clear platform movies immediately when switching to non-provider filters
+    if (!isPlatformProvider) {
+      setPlatformMovies([]);
+      return;
+    }
+
+    const PROVIDER_IDS: Record<string, number> = {
+      'Netflix': 8,
+      'Prime Video': 119,
+      'Max': 1899,
+      'Disney+': 337,
+      'Apple TV+': 350
+    };
+    const providerId = PROVIDER_IDS[activePlatformFilter];
+    if (!providerId) return;
 
     const loadPlatformMovies = async () => {
       const apiKey = import.meta.env.VITE_TMDB_API_KEY;
+      setIsPlatformLoading(true);
+      setPlatformMovies([]); // Clear stale data immediately for instant visual feedback
+
       if (!apiKey || apiKey === "SUA_CHAVE_AQUI" || apiKey.trim() === "") {
-        console.log("TMDB API Key não configurada para carregar filmes por plataforma. Ativando fallback local.");
+        console.log("TMDB API Key não configurada. Usando fallback local para plataforma.");
         setPlatformMovies(moviesDatabase.filter(m => m.platforms.includes(activePlatformFilter)));
+        setIsPlatformLoading(false);
         return;
       }
 
-      // Netflix (8), Amazon Prime Video (119), Max (1899), Disney+ (337), Apple TV+ (350)
-      let providerId = 0;
-      if (activePlatformFilter === 'Netflix') providerId = 8;
-      else if (activePlatformFilter === 'Prime Video') providerId = 119;
-      else if (activePlatformFilter === 'Max') providerId = 1899;
-      else if (activePlatformFilter === 'Disney+') providerId = 337;
-      else if (activePlatformFilter === 'Apple TV+') providerId = 350;
-
-      if (!providerId) return;
-
       try {
-        setIsReplenishingDiscovery(true);
+        console.log(`⚡ Platform Filter: Fetching TMDB for ${activePlatformFilter} (providerId=${providerId})`);
         const tmdbMovies = await fetchTrendingOrDiscover(apiKey, providerId);
         if (tmdbMovies && tmdbMovies.length > 0) {
-          // Register in customMovies
+          // Register in customMovies for rating support
           setCustomMovies(prev => {
             const nextCustom = [...prev];
             tmdbMovies.forEach(m => {
@@ -1468,18 +1479,25 @@ export default function App() {
             return nextCustom;
           });
           setPlatformMovies(tmdbMovies);
-          triggerGlobalToast(`⚡ Catálogo real do TMDB atualizado para ${activePlatformFilter}!`, "success");
+          triggerGlobalToast(`⚡ Catálogo TMDB: ${tmdbMovies.length} títulos carregados para ${activePlatformFilter}!`, "success");
+          console.log(`✅ Platform Filter: ${tmdbMovies.length} movies loaded for ${activePlatformFilter}`);
+        } else {
+          // TMDB returned 0 results — fall back to local data
+          const localFallback = moviesDatabase.filter(m => m.platforms.includes(activePlatformFilter));
+          setPlatformMovies(localFallback);
+          console.warn(`⚠️ Platform Filter: TMDB returned 0 results for ${activePlatformFilter}. Using local fallback (${localFallback.length} items).`);
         }
       } catch (err) {
         console.error("Erro ao carregar filmes por plataforma do TMDB, usando fallback local:", err);
         setPlatformMovies(moviesDatabase.filter(m => m.platforms.includes(activePlatformFilter)));
       } finally {
-        setIsReplenishingDiscovery(false);
+        setIsPlatformLoading(false);
       }
     };
 
     loadPlatformMovies();
-  }, [activePlatformFilter, user, hasCompletedOnboarding]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePlatformFilter]);
 
   // Synchronize or initialize discoveryCarouselMovies when it is empty and we're not currently in the loading/replenishing state
   useEffect(() => {
@@ -3554,9 +3572,10 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setActivePlatformFilter(platform.id);
-                            if (platform.id !== 'all') {
-                              setOnlineSearchResult(null);
-                            }
+                            // Clear search state to prevent mode conflict
+                            setOnlineSearchResult(null);
+                            setOnlineSearchQuery('');
+                            setTmdbSearchResults(null);
                           }}
                           className={`text-xs px-3.5 py-2 rounded-xl border font-sans font-medium transition-all duration-200 cursor-pointer ${
                             isActive 
@@ -3725,22 +3744,43 @@ export default function App() {
                             : `Obras mais aclamadas e populares distribuídas sob esta plataforma`}
                         </p>
                       </div>
-                      <span className="text-xs text-indigo-400 bg-indigo-950/40 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-mono">
-                        {filteredCatalog.length} correspondentes
-                      </span>
+                      {isPlatformLoading ? (
+                        <span className="text-xs text-[#00E5FF] bg-[#00E5FF]/10 px-2.5 py-1 rounded-xl border border-[#00E5FF]/20 font-mono flex items-center gap-1.5">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Carregando...
+                        </span>
+                      ) : (
+                        <span className="text-xs text-indigo-400 bg-indigo-950/40 px-2.5 py-1 rounded-xl border border-indigo-500/20 font-mono">
+                          {filteredCatalog.length} correspondentes
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                      <AnimatePresence mode="popLayout">
-                        {filteredCatalog.slice(0, catalogLimit).map((movie, idx) => renderAppleMovieCard(movie,
-                          proximityMatches[movie.id] ? (
-                            <div className="absolute -top-2.5 left-4 z-15 bg-gradient-to-r from-amber-500 via-indigo-650 to-purple-600 font-bold tracking-wider uppercase text-[8.5px] px-2.5 py-0.5 rounded-full border border-indigo-500/30 flex items-center gap-1 leading-none shadow-md">
-                              ⭐ Estilo idêntico ao que curtiu: {proximityMatches[movie.id].movieTitle}
+                      {isPlatformLoading ? (
+                        /* Platform loading spinner — fires instantly on button click */
+                        <div className="col-span-3 flex flex-col items-center gap-4 py-16">
+                          <div className="relative w-14 h-14">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-[#00E5FF]/10 animate-ping" />
+                            <div className="relative rounded-full h-14 w-14 bg-gradient-to-tr from-[#00E5FF]/20 to-indigo-500/20 border border-[#00E5FF]/30 flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 text-[#00E5FF] animate-spin" />
                             </div>
-                          ) : undefined,
-                          idx
-                        ))}
-                      </AnimatePresence>
+                          </div>
+                          <p className="text-xs text-zinc-400 font-mono">
+                            Carregando catálogo {activePlatformFilter}...
+                          </p>
+                        </div>
+                      ) : (
+                        <AnimatePresence mode="popLayout">
+                          {filteredCatalog.slice(0, catalogLimit).map((movie, idx) => renderAppleMovieCard(movie,
+                            proximityMatches[movie.id] ? (
+                              <div className="absolute -top-2.5 left-4 z-15 bg-gradient-to-r from-amber-500 via-indigo-650 to-purple-600 font-bold tracking-wider uppercase text-[8.5px] px-2.5 py-0.5 rounded-full border border-indigo-500/30 flex items-center gap-1 leading-none shadow-md">
+                                ⭐ Estilo idêntico ao que curtiu: {proximityMatches[movie.id].movieTitle}
+                              </div>
+                            ) : undefined,
+                            idx
+                          ))}
+                        </AnimatePresence>
+                      )}
                     </div>
 
                     {filteredCatalog.length > catalogLimit && (
