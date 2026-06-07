@@ -86,16 +86,39 @@ export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: 
     throw new Error('Chave de API do TMDB não configurada.');
   }
 
-  const oneYearAgoDate = new Date();
-  oneYearAgoDate.setFullYear(oneYearAgoDate.getFullYear() - 1);
-  const dateString = oneYearAgoDate.toISOString().split('T')[0];
+  // ── BULLETPROOF QUERY: hardcoded 2023+ years, no fragile date math ──────
+  // For platform-specific filters we cast a wide net (vote_count >= 100).
+  // For the generic discovery feed we require more votes for quality.
+  const voteThreshold = watchProviderId ? 100 : 200;
 
-  let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=300&watch_region=BR&primary_release_date.gte=${dateString}&with_watch_monetization_types=flatrate`;
-  
+  let url: string;
+
   if (watchProviderId) {
-    url += `&with_watch_providers=${watchProviderId}`;
+    // Platform-specific: filter strictly by provider + recent years
+    url = [
+      `https://api.themoviedb.org/3/discover/movie`,
+      `?api_key=${apiKey}`,
+      `&language=pt-BR`,
+      `&sort_by=popularity.desc`,
+      `&vote_count.gte=${voteThreshold}`,
+      `&watch_region=BR`,
+      `&with_watch_providers=${watchProviderId}`,
+      `&with_watch_monetization_types=flatrate`,
+      `&primary_release_date.gte=2023-01-01`,
+    ].join('');
   } else {
-    url += `&with_genres=878,18`;
+    // General discovery: popular Sci-Fi & Drama from 2023+
+    url = [
+      `https://api.themoviedb.org/3/discover/movie`,
+      `?api_key=${apiKey}`,
+      `&language=pt-BR`,
+      `&sort_by=popularity.desc`,
+      `&vote_count.gte=${voteThreshold}`,
+      `&watch_region=BR`,
+      `&with_watch_monetization_types=flatrate`,
+      `&primary_release_date.gte=2023-01-01`,
+      `&with_genres=878,18`,
+    ].join('');
   }
 
   const res = await fetch(url);
@@ -104,7 +127,21 @@ export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: 
   }
 
   const data = await res.json();
-  const results = data.results || [];
+  let results: any[] = data.results || [];
+
+  // ── TRENDING FALLBACK ────────────────────────────────────────────────────
+  // If discover returns nothing (e.g. provider has no titles that week),
+  // fall back to the global /trending endpoint so the UI is never empty.
+  if (results.length === 0) {
+    console.warn(`[TMDB] discover returned 0 results${watchProviderId ? ` for provider ${watchProviderId}` : ''}. Falling back to /trending/movie/week.`);
+    const trendingRes = await fetch(
+      `https://api.themoviedb.org/3/trending/movie/week?api_key=${apiKey}&language=pt-BR`
+    );
+    if (trendingRes.ok) {
+      const trendingData = await trendingRes.json();
+      results = trendingData.results || [];
+    }
+  }
 
   // ── POSTER GATEKEEPER ──────────────────────────────────────────────────
   // Discard any movie that lacks official TMDB artwork before fetching credits.
@@ -118,7 +155,7 @@ export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: 
     const credits = await fetchMovieCredits(item.id, apiKey);
     const genres = (item.genre_ids || []).map((id: number) => TMDB_GENRES[id] || 'Outros').filter((g: string) => g !== 'Outros');
     const posterUrl = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : undefined;
-    
+
     let platforms = getMoviePlatforms(item.popularity || 0);
     if (watchProviderId === 8) platforms = ['Netflix'];
     else if (watchProviderId === 119) platforms = ['Prime Video'];

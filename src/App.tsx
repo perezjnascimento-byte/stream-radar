@@ -1513,14 +1513,13 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
   useEffect(() => {
     if (!user || !hasCompletedOnboarding) return;
     const loadTMDBDiscover = async () => {
-      // NOTE: Configure your TMDB API Key in your .env file as VITE_TMDB_API_KEY
       const apiKey = import.meta.env.VITE_TMDB_API_KEY;
       if (!apiKey || apiKey === "SUA_CHAVE_AQUI" || apiKey.trim() === "") {
         console.log("TMDB API Key não configurada. Usando dados locais para o Radar de Descobertas.");
         return;
       }
+      setIsReplenishingDiscovery(true);
       try {
-        setIsReplenishingDiscovery(true);
         const tmdbMovies = await fetchTrendingOrDiscover(apiKey);
         if (tmdbMovies && tmdbMovies.length > 0) {
           // Register unique movies in customMovies immediately to support other views
@@ -1534,14 +1533,27 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
             return nextCustom;
           });
           setDiscoveryCarouselMovies(tmdbMovies);
+        } else {
+          // TMDB returned nothing even after the trending fallback inside the service —
+          // seed the feed with local discovery movies so the spinner is never permanent.
+          console.warn('[Discovery] TMDB returned 0 movies. Seeding from local discoveryMovies.');
+          if (discoveryMovies.length > 0) {
+            setDiscoveryCarouselMovies(discoveryMovies.slice(0, 6));
+          }
         }
       } catch (err) {
         console.error("Erro ao carregar descobertas do TMDB:", err);
+        // On error also seed from local data so the UI is never stuck
+        if (discoveryMovies.length > 0) {
+          setDiscoveryCarouselMovies(discoveryMovies.slice(0, 6));
+        }
       } finally {
+        // Always clear the spinner — regardless of success, empty or error
         setIsReplenishingDiscovery(false);
       }
     };
     loadTMDBDiscover();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, hasCompletedOnboarding]);
 
   // Load platform movies from TMDB on activePlatformFilter change
@@ -2633,12 +2645,12 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
           </button>
 
           {/* Typography Placement: INSIDE the card, resting over bottom gradient */}
-          <div className="absolute bottom-5 left-0 right-0 p-4 pb-8 flex flex-col gap-1.5 z-10 text-left pointer-events-none">
+          <div className="absolute bottom-5 left-0 right-0 px-4 pb-8 pt-3 flex flex-col gap-1.5 z-20 text-left pointer-events-none overflow-hidden">
             {/* Show type badge & progress */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className={`text-[8px] font-mono font-bold tracking-wider px-2 py-0.5 rounded border uppercase ${
-                movieItem.type === 'Série' 
-                  ? 'bg-amber-950/65 border-amber-500/30 text-amber-300' 
+            <div className="flex flex-wrap items-center gap-1.5 min-h-0">
+              <span className={`text-[8px] font-mono font-bold tracking-wider px-2 py-0.5 rounded border uppercase shrink-0 ${
+                movieItem.type === 'Série'
+                  ? 'bg-amber-950/65 border-amber-500/30 text-amber-300'
                   : 'bg-indigo-950/65 border-indigo-500/30 text-indigo-300'
               }`}>
                 {movieItem.type}
@@ -2652,7 +2664,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
             </h3>
 
             {/* Metadata in Gray (#A1A1A6, Regular, 12px) */}
-            <p className="text-[#A1A1A6] text-[12px] font-normal leading-tight">
+            <p className="text-[#A1A1A6] text-[12px] font-normal leading-tight truncate">
               {movieItem.year} • {movieItem.genres.slice(0, 2).join(', ')}
             </p>
           </div>
