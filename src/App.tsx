@@ -3208,9 +3208,20 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
       <header className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/5 px-6 py-4.5">
         <div className="max-w-7xl mx-auto flex flex-row justify-between items-center w-full gap-4">
           
-          {/* Logo Brand Overhaul */}
-          <div className="flex items-center gap-3 select-none shrink-0">
-            <div className="bg-white/5 p-2 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-center">
+          {/* Logo Brand Overhaul — clickable to reset state & scroll to top */}
+          <button
+            onClick={() => {
+              setActiveTab('catalog');
+              setOnlineSearchQuery('');
+              setOnlineSearchResult(null);
+              setTmdbSearchResults(null);
+              setActivePlatformFilter('all');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="flex items-center gap-3 select-none shrink-0 cursor-pointer group/logo active:scale-95 transition-transform duration-150"
+            aria-label="Stream Radar — Ir para o início"
+          >
+            <div className="bg-white/5 p-2 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-center group-hover/logo:border-[#00E5FF]/30 group-hover/logo:bg-[#00E5FF]/5 transition-all duration-200">
               <svg className="w-6 h-6 text-[#00E5FF] drop-shadow-[0_0_8px_rgba(0,229,255,0.45)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <circle cx="12" cy="18" r="1.5" fill="currentColor" />
                 <path d="M8.5 14.5a5 5 0 0 1 7 0" />
@@ -3219,8 +3230,8 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="font-display text-xl font-extrabold tracking-tight text-white font-sans">
-                  Stream <span className="text-zinc-400">Radar</span>
+                <h1 className="font-display text-xl font-extrabold tracking-tight text-white font-sans group-hover/logo:text-[#00E5FF] transition-colors duration-200">
+                  Stream <span className="text-zinc-400 group-hover/logo:text-white transition-colors duration-200">Radar</span>
                 </h1>
                 <span className="text-[9px] font-mono leading-none tracking-widest text-[#050505] font-black bg-[#00E5FF] px-1.5 py-0.5 rounded shadow-sm">
                   PRO
@@ -3228,13 +3239,18 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
               </div>
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold font-mono">Curadoria & Feedback Instantâneo</p>
             </div>
-          </div>
+          </button>
 
           {/* Centralized Apple Horizontal Tabs Row */}
           <nav className="flex flex-row overflow-x-auto whitespace-nowrap gap-3 pb-2 scrollbar-hide w-full bg-zinc-900/90 p-1 rounded-2xl border border-white/5 backdrop-blur-xl md:justify-center">
             <button
-              onClick={() => setActiveTab('catalog')}
-              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+              onClick={() => {
+                setActiveTab('catalog');
+                setTimeout(() => {
+                  document.getElementById('section-exploracoes')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }}
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 activeTab === 'catalog'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3243,8 +3259,13 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
               🎞️ Explorações
             </button>
             <button
-              onClick={() => setActiveTab('watchlist')}
-              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+              onClick={() => {
+                setActiveTab('watchlist');
+                setTimeout(() => {
+                  document.getElementById('section-quero-assistir')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }}
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
                 activeTab === 'watchlist'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3258,8 +3279,13 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
               )}
             </button>
             <button
-              onClick={() => setActiveTab('history')}
-              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+              onClick={() => {
+                setActiveTab('history');
+                setTimeout(() => {
+                  document.getElementById('section-historico')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }}
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 activeTab === 'history'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3273,8 +3299,13 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
               )}
             </button>
             <button
-              onClick={() => setActiveTab('analytics')}
-              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+              onClick={() => {
+                setActiveTab('analytics');
+                setTimeout(() => {
+                  document.getElementById('section-perfil-cognitivo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }}
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                 activeTab === 'analytics'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3344,11 +3375,11 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
       </header>
 
       {/* MAIN CONTAINER */}
-      <main className="max-w-7xl mx-auto px-6 mt-8 relative z-10">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 mt-8 relative z-10">
 
         {/* 1. EXPORATIONS VIEW PORT Tab */}
         {activeTab === 'catalog' && (
-          <div className="space-y-12 animate-fade-in text-left">
+          <div id="section-exploracoes" className="space-y-12 animate-fade-in text-left">
 
             {/* RADAR DE DESCOBERTAS: PARA VOCÊ (INFINITE DISCOVERY FEED) */}
             <section className="bg-zinc-950/60 border border-[#00E5FF]/10 rounded-3xl p-4 md:p-6 shadow-[0_0_50px_rgba(0,229,255,0.02)] relative overflow-hidden">
@@ -3757,7 +3788,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
                         if (onlineSearchResult) setOnlineSearchResult(null);
                       }}
                       placeholder="Busque absolutamente qualquer filme, franquia ou série (Ex: Matrix, Shutter Island, Avengers, Breaking Bad...)"
-                      className="w-full pl-10 pr-4 py-3.5 bg-black/60 rounded-2xl border border-white/10 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 text-sm placeholder-zinc-500 text-white font-sans transition-all"
+                      className="w-full pl-10 px-4 pr-4 py-3.5 bg-black/60 rounded-2xl border border-white/10 focus:border-indigo-500/50 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 text-sm placeholder-zinc-500 text-white font-sans transition-all"
                     />
                     {onlineSearchQuery && (
                       <button 
@@ -3785,7 +3816,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono block pl-1">
                     Filtrar por streaming ou exibição nos cinemas:
                   </span>
-                  <div className="flex flex-row overflow-x-auto whitespace-nowrap gap-3 pb-2 scrollbar-hide w-full">
+                  <div className="flex flex-row overflow-x-auto whitespace-nowrap gap-3 md:gap-4 pb-2 scrollbar-hide w-full">
                     {[
                       { id: 'all', label: '🌍 Todos', color: 'border-white/5 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700 hover:text-white' },
                       { id: 'Netflix', label: '🔴 Netflix', color: 'border-white/5 bg-red-950/10 text-rose-100 hover:border-red-800/40' },
@@ -4113,7 +4144,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
 
         {/* 2. WANT TO WATCH VIEW Tab */}
         {activeTab === 'watchlist' && (
-          <div className="space-y-6">
+          <div id="section-quero-assistir" className="space-y-6">
             
             <div className="bg-zinc-900/40 p-4 md:p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
@@ -4160,7 +4191,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
 
         {/* 3. HISTÓRICO VIEW Tab */}
         {activeTab === 'history' && (
-          <div className="space-y-6">
+          <div id="section-historico" className="space-y-6">
             <div className="bg-zinc-900/40 p-4 md:p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h2 className="font-display font-black text-xl text-white flex items-center gap-2">
@@ -4298,6 +4329,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
 
         {/* 4. PROFILE ANALYTICS & AI PORT TAB */}
         {activeTab === 'analytics' && (
+          <div id="section-perfil-cognitivo">
           <div className="space-y-6">
             {ratings.length < 20 ? (
               <div className="bg-zinc-950/60 border border-white/10 backdrop-blur-2xl rounded-3xl p-12 text-center flex flex-col items-center justify-center gap-8 py-24 shadow-[0_0_50px_rgba(0,229,255,0.03)] min-h-[500px] relative overflow-hidden max-w-2xl mx-auto mt-6">
@@ -4764,6 +4796,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
 
               </>
             )}
+          </div>
           </div>
         )}
 
