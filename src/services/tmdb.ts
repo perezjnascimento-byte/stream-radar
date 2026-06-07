@@ -86,10 +86,10 @@ export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: 
     throw new Error('Chave de API do TMDB não configurada.');
   }
 
-  let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=100`;
+  let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=300&watch_region=BR`;
   
   if (watchProviderId) {
-    url += `&with_watch_providers=${watchProviderId}&watch_region=BR`;
+    url += `&with_watch_providers=${watchProviderId}`;
   } else {
     url += `&with_genres=878,18`;
   }

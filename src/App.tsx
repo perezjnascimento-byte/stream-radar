@@ -133,6 +133,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authFormLoading, setAuthFormLoading] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -3184,10 +3185,10 @@ Return ONLY a valid JSON object with the following structure:
 
       {/* STICKY APPLE TV NAVIGATION DESIGN */}
       <header className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/5 px-6 py-4.5">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex flex-row justify-between items-center w-full gap-4">
           
           {/* Logo Brand Overhaul */}
-          <div className="flex items-center gap-3 select-none">
+          <div className="flex items-center gap-3 select-none shrink-0">
             <div className="bg-white/5 p-2 rounded-2xl shadow-2xl border border-white/10 flex items-center justify-center">
               <svg className="w-6 h-6 text-[#00E5FF] drop-shadow-[0_0_8px_rgba(0,229,255,0.45)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <circle cx="12" cy="18" r="1.5" fill="currentColor" />
@@ -3197,7 +3198,7 @@ Return ONLY a valid JSON object with the following structure:
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="font-display text-2xl font-extrabold tracking-tight text-white font-sans">
+                <h1 className="font-display text-xl font-extrabold tracking-tight text-white font-sans">
                   Stream <span className="text-zinc-400">Radar</span>
                 </h1>
                 <span className="text-[9px] font-mono leading-none tracking-widest text-[#050505] font-black bg-[#00E5FF] px-1.5 py-0.5 rounded shadow-sm">
@@ -3209,10 +3210,10 @@ Return ONLY a valid JSON object with the following structure:
           </div>
 
           {/* Centralized Apple Horizontal Tabs Row */}
-          <nav className="flex bg-zinc-900/90 p-1 rounded-2xl border border-white/5 backdrop-blur-xl shrink-0 flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-hide pr-4 gap-1 md:justify-center">
+          <nav className="flex flex-row overflow-x-auto whitespace-nowrap gap-3 pb-2 scrollbar-hide w-full bg-zinc-900/90 p-1 rounded-2xl border border-white/5 backdrop-blur-xl md:justify-center">
             <button
               onClick={() => setActiveTab('catalog')}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'catalog'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3222,7 +3223,7 @@ Return ONLY a valid JSON object with the following structure:
             </button>
             <button
               onClick={() => setActiveTab('watchlist')}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-2 cursor-pointer ${
                 activeTab === 'watchlist'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3237,7 +3238,7 @@ Return ONLY a valid JSON object with the following structure:
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3252,7 +3253,7 @@ Return ONLY a valid JSON object with the following structure:
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`shrink-0 px-4 py-2 text-xs font-semibold rounded-xl tracking-tight transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'analytics'
                   ? 'bg-white text-zinc-900 shadow-md scale-[1.02] font-bold'
                   : 'text-zinc-400 hover:text-white'
@@ -3274,42 +3275,46 @@ Return ONLY a valid JSON object with the following structure:
             </div>
 
             {user && (
-              <div className="flex items-center gap-2.5 border-l border-white/10 pl-4 relative group">
-                <button className="flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-white/10 px-3 py-1.5 rounded-xl transition-colors cursor-pointer">
+              <div className="flex items-center gap-2.5 border-l border-white/10 pl-4 relative">
+                <button 
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="w-8 h-8 rounded-full border border-gray-600 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 transition-colors cursor-pointer shrink-0"
+                >
                   <User className="w-4 h-4 text-zinc-400" />
-                  <span className="text-xs font-semibold hidden sm:block">Minha Conta</span>
                 </button>
-                <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                  <div className="px-3 py-2 border-b border-white/5 mb-1">
-                    <p className="text-[10px] text-zinc-500 font-mono truncate" title={user.email}>{user.email}</p>
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-[#0a0a0a]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50">
+                    <div className="px-3 py-2 border-b border-white/5 mb-1">
+                      <p className="text-[10px] text-zinc-500 font-mono truncate" title={user.email}>{user.email}</p>
+                    </div>
+                    <button 
+                      onClick={async () => {
+                        try {
+                          await resetPassword(user.email);
+                          triggerGlobalToast("Link de recuperação enviado para o seu e-mail", "success");
+                        } catch (e) {
+                          triggerGlobalToast("Erro ao enviar email", "error");
+                        }
+                      }}
+                      className="w-full text-left text-xs text-zinc-300 hover:text-white hover:bg-white/5 rounded-lg px-3 py-2 transition-colors cursor-pointer"
+                    >
+                      Redefinir Senha
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        try {
+                          await logOut();
+                          triggerGlobalToast("Você saiu com sucesso.", "info");
+                        } catch (e) {
+                          triggerGlobalToast("Erro ao sair.", "error");
+                        }
+                      }}
+                      className="w-full text-left text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg px-3 py-2 transition-colors mt-1 cursor-pointer"
+                    >
+                      Sair
+                    </button>
                   </div>
-                  <button 
-                    onClick={async () => {
-                      try {
-                        await resetPassword(user.email);
-                        triggerGlobalToast("Link de recuperação enviado para o seu e-mail", "success");
-                      } catch (e) {
-                        triggerGlobalToast("Erro ao enviar email", "error");
-                      }
-                    }}
-                    className="w-full text-left text-xs text-zinc-300 hover:text-white hover:bg-white/5 rounded-lg px-3 py-2 transition-colors cursor-pointer"
-                  >
-                    Redefinir Senha
-                  </button>
-                  <button 
-                    onClick={async () => {
-                      try {
-                        await logOut();
-                        triggerGlobalToast("Você saiu com sucesso.", "info");
-                      } catch (e) {
-                        triggerGlobalToast("Erro ao sair.", "error");
-                      }
-                    }}
-                    className="w-full text-left text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg px-3 py-2 transition-colors mt-1 cursor-pointer"
-                  >
-                    Sair
-                  </button>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -3759,7 +3764,7 @@ Return ONLY a valid JSON object with the following structure:
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono block pl-1">
                     Filtrar por streaming ou exibição nos cinemas:
                   </span>
-                  <div className="flex flex-nowrap overflow-x-auto overflow-y-hidden scrollbar-hide pr-4 pb-2 gap-2">
+                  <div className="flex flex-row overflow-x-auto whitespace-nowrap gap-3 pb-2 scrollbar-hide w-full">
                     {[
                       { id: 'all', label: '🌍 Todos', color: 'border-white/5 bg-zinc-900/40 text-zinc-300 hover:border-zinc-700 hover:text-white' },
                       { id: 'Netflix', label: '🔴 Netflix', color: 'border-white/5 bg-red-950/10 text-rose-100 hover:border-red-800/40' },
@@ -3782,7 +3787,7 @@ Return ONLY a valid JSON object with the following structure:
                             setOnlineSearchQuery('');
                             setTmdbSearchResults(null);
                           }}
-                          className={`text-xs px-3.5 py-2 rounded-xl border font-sans font-medium transition-all duration-200 cursor-pointer ${
+                          className={`shrink-0 text-xs px-3.5 py-2 rounded-xl border font-sans font-medium transition-all duration-200 cursor-pointer ${
                             isActive 
                               ? 'border-[#00E5FF] text-[#00E5FF] bg-[#00E5FF]/10 shadow-[0_0_15px_rgba(0,229,255,0.15)] font-bold scale-[1.02]' 
                               : platform.color
