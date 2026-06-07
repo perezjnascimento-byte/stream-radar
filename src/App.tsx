@@ -291,15 +291,23 @@ Return ONLY a valid JSON object with the following structure:
   "connectingThread": "A short, deep 2-sentence explanation of what really connects their taste (e.g., aesthetic, pacing, themes).",
   "dominantVibe": "1-3 words describing the mood",
   "nextRecommendationPrompt": "A highly specific search query string to find their next favorite movie."
-}`;
+}
+Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    try {
+      const result = await model.generateContent(prompt);
+      const rawText = result.response.text();
+      const cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanedText);
+    } catch (error) {
+      console.error("Gemini Raw Error:", error);
+      return { 
+        archetypeTitle: "O Analista em Calibração", 
+        connectingThread: "Nosso motor de IA está calibrando suas escolhas. Continue avaliando.", 
+        dominantVibe: "Processando",
+        nextRecommendationPrompt: "filmes aclamados"
+      };
     }
-    throw new Error("Invalid JSON returned by Gemini");
   };
 
   const handleGenerateCognitiveProfile = async () => {

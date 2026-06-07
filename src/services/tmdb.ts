@@ -86,7 +86,11 @@ export async function fetchTrendingOrDiscover(apiKey: string, watchProviderId?: 
     throw new Error('Chave de API do TMDB não configurada.');
   }
 
-  let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=300&watch_region=BR`;
+  const oneYearAgoDate = new Date();
+  oneYearAgoDate.setFullYear(oneYearAgoDate.getFullYear() - 1);
+  const dateString = oneYearAgoDate.toISOString().split('T')[0];
+
+  let url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&sort_by=popularity.desc&vote_count.gte=300&watch_region=BR&primary_release_date.gte=${dateString}&with_watch_monetization_types=flatrate`;
   
   if (watchProviderId) {
     url += `&with_watch_providers=${watchProviderId}`;
