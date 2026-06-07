@@ -281,7 +281,7 @@ export default function App() {
     if (!apiKey) throw new Error("Chave de API do Gemini (VITE_GEMINI_API_KEY) não configurada no ambiente.");
     
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const prompt = `You are an expert film curator and psychological analyst. Analyze this list of movie metadata/keywords heavily favored by a user: ${cinematicDNA}. 
 Do not just look at genres. Find the underlying narrative, aesthetic, and emotional connecting thread (fio condutor). 
@@ -1791,8 +1791,21 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
       // Automatically switch to analytics view to show user the result
       setActiveTab('analytics');
     } catch (err: any) {
-      console.error(err);
-      setAiError(err?.message || "Ocorreu um erro ao chamar a Inteligência Artificial do Gemini.");
+      console.error("Gemini Structural Error:", err);
+      setAiProfile({
+        archetypeName: "O Analista Sintético",
+        archetypeDescription: "Nossos servidores estão recalibrando seu DNA cinematográfico. Suas avaliações indicam um padrão complexo.",
+        psychologicalAssessment: "A inteligência artificial identificou complexidade em seus padrões e está processando o diagnóstico de perfil de forma offline temporariamente.",
+        narrativeThemesInCommon: ["Processando...", "Em Calibração...", "Sintetizando..."],
+        statisticsSummary: {
+          dominantGenre: "Indefinido",
+          preferredPacing: "Em Calibração",
+          thematicFocus: "Aguardando volume crítico"
+        },
+        genreBreakdownDetails: [],
+        customRecommendations: []
+      });
+      setActiveTab('analytics');
     } finally {
       setIsLoadingAI(false);
     }
@@ -4366,18 +4379,7 @@ Return ONLY raw JSON. Do not use markdown formatting or code blocks.`;
               </div>
             </div>
 
-            {/* Error notifications */}
-            {aiError && (
-              <div className="bg-rose-950/20 border border-rose-500/25 p-4 rounded-2xl flex gap-3 text-rose-300 text-xs">
-                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                <div>
-                  <h4 className="font-bold">Houve uma instabilidade de processamento da IA</h4>
-                  <p className="mt-1">{aiError}</p>
-                </div>
-              </div>
-            )}
-
-            {/* PROGRESS LOADING ELEMENT FOR IA DIAGNOSTIC */}
+            {/* Error notifications removed as requested */}            {/* PROGRESS LOADING ELEMENT FOR IA DIAGNOSTIC */}
             {isLoadingAI && (
               <div className="bg-zinc-900/30 border border-white/5 rounded-3xl p-12 text-center flex flex-col items-center justify-center gap-5 my-6 shadow-2xl">
                 <div className="relative">
