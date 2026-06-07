@@ -206,6 +206,7 @@ app.use(express.json());
         4. Ofereça 4 recomendações novas, cirúrgicas, surpreendentes e extremamente nichadas de filmes ou séries que representem as plataformas listadas (Netflix, Prime Video, Disney+, Apple TV+, Max, Cinema) e detalhe minuciosamente por que elas se encaixam no perfil conceitual detalhado dele.
 
         As recomendações precisam obrigatoriamente existir no mundo real! Não crie títulos inventados. Escolha realizadores (diretores) lendários ou relevantes para cada recomendação que se alinhem com o estilo de Christopher Nolan, David Fincher, Villeneuve, Bong Joon Ho, Wes Anderson etc, de acordo com o gosto do espectador.
+        Return ONLY raw JSON. No markdown.
       `;
 
       const userPrompt = `
@@ -298,12 +299,31 @@ app.use(express.json());
         }
       });
 
-      const responseText = response.text ? response.text.trim() : '';
-      if (!responseText) {
+      const rawText = response.text ? response.text.trim() : '';
+      if (!rawText) {
         throw new Error('O modelo não retornou uma resposta válida.');
       }
 
-      const parsedJSON = JSON.parse(responseText);
+      let parsedJSON;
+      try {
+        const cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        parsedJSON = JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.error("Gemini Structural Error:", parseError);
+        parsedJSON = {
+          archetypeName: "O Analista em Calibração",
+          archetypeDescription: "Análise estrutural temporariamente indisponível.",
+          psychologicalAssessment: "Nosso motor de IA está recalibrando suas escolhas. Continue avaliando mais títulos no catálogo.",
+          narrativeThemesInCommon: ["Processando...", "Recalibrando...", "Sintetizando..."],
+          statisticsSummary: {
+            dominantGenre: "Indefinido",
+            preferredPacing: "Em Análise",
+            thematicFocus: "Aguardando mais dados"
+          },
+          genreBreakdownDetails: [],
+          customRecommendations: []
+        };
+      }
       return res.json(parsedJSON);
 
     } catch (error: any) {
@@ -357,6 +377,7 @@ app.use(express.json());
         Sua resposta de retorno DEVE ser um array JSON de objetos, traduzindo todos os campos textuais (como sinopse, plotType, etc.) para o idioma "Português Brasileiro".
         Escolha uma das seguintes strings estritas para o campo platforms: "Netflix", "Max", "Prime Video", "Disney+", "Apple TV+", "Cinema" ou "Outros".
         Para o campo plotCategory, o valor DEVE ser exatamente uma das opções seguintes: "Ficção Científica", "Ação", "Drama", "Comédia", "Suspense", "Fantasia", "Terror", "Romance" ou "Outros".
+        Return ONLY raw JSON. No markdown.
       `;
 
       const userPrompt = `Pesquisa do usuário: "${query}"`;
@@ -406,12 +427,20 @@ app.use(express.json());
         }
       });
 
-      const responseText = response.text ? response.text.trim() : '';
-      if (!responseText) {
+      const rawText = response.text ? response.text.trim() : '';
+      if (!rawText) {
         throw new Error('O modelo não retornou uma resposta válida para a busca do título.');
       }
 
-      const movieData = JSON.parse(responseText);
+      let movieData;
+      try {
+        const cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        movieData = JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.error("Gemini Search Error:", parseError);
+        throw new Error("Falha na formatação JSON.");
+      }
+
       // Ensure we return an array even if something went wrong and a single object is returned
       const moviesArray = Array.isArray(movieData) ? movieData : [movieData];
       return res.json(moviesArray);
