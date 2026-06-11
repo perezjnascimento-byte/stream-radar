@@ -1,7 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { moviesDatabase } from '../src/data/movies';
@@ -10,13 +8,10 @@ import { moviesDatabase } from '../src/data/movies';
 // Load environment variables
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 function generateHeuristicProfile(ratings: any[], favorites: string[]): any {
   const loveIds = new Set((ratings || []).filter(r => r.liked === 'love').map(r => r.movieId));
   const likeIds = new Set((ratings || []).filter(r => r.liked === 'like').map(r => r.movieId));
-  const seenIds = new Set((ratings || []).filter(r => r.watched).map(r => r.movieId));
+  const seenIds = new Set((ratings || []).filter(r => r.watched !== false).map(r => r.movieId));
 
   const categoryScores: Record<string, number> = {};
   (ratings || []).forEach((r: any) => {
@@ -101,7 +96,7 @@ function generateHeuristicProfile(ratings: any[], favorites: string[]): any {
   const availableRecs = moviesDatabase.filter(m => !seenIds.has(m.id));
   const categoryRecs = availableRecs.filter(m => m.plotCategory === topCategory);
   
-  const finalRecsList = [...categoryRecs, ...availableRecs].slice(0, 4);
+  const finalRecsList = Array.from(new Set([...categoryRecs, ...availableRecs])).slice(0, 4);
 
   const customRecommendations = finalRecsList.map((m, idx) => {
     return {
@@ -475,6 +470,7 @@ app.use(express.json());
     (async () => {
       // Serve static assets or mount Vite dev middleware
       if (process.env.NODE_ENV !== 'production') {
+        const { createServer: createViteServer } = await import('vite');
         const vite = await createViteServer({
           server: { middlewareMode: true },
           appType: 'spa',
